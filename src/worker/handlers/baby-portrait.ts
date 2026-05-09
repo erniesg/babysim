@@ -7,34 +7,39 @@ export interface BabyPortraitEnv {
   GOOGLE_API_KEY?: string;
 }
 
+// Match contracts/game-state.ts → BabyVisualState exactly so frontend can pass through.
 type BabyVisualState =
-  | "content"
+  | "settled"
+  | "drowsy"
   | "hungry"
-  | "tired"
+  | "fussy"
   | "crying"
-  | "alert"
-  | "sleeping";
+  | "sleep";
 
 type BabyGender = "girl" | "boy";
 
 interface BabyTraits {
-  temperament?: "easy" | "spirited" | "sensitive";
+  soothing?: "motion" | "sound" | "contact" | "silence";
+  stimulation?: "low" | "medium" | "high";
+  feeding?: "frequent" | "regular" | "unpredictable";
+  sleep?: "heavy" | "light" | "fights";
+  temperament?: "sunny" | "sensitive" | "stubborn" | "chaotic";
   hairColor?: string;
   eyeColor?: string;
   skinTone?: string;
 }
 
 const VALID_STATES = new Set<BabyVisualState>([
-  "content", "hungry", "tired", "crying", "alert", "sleeping",
+  "settled", "drowsy", "hungry", "fussy", "crying", "sleep",
 ]);
 
 const STATE_DESCRIPTIONS: Record<BabyVisualState, string> = {
-  content:  "eyes open and calm, soft relaxed expression, a small content look, perhaps a faint upward curl at the lips",
-  hungry:   "mouth opening and closing, fists clenched, brow slightly furrowed, face beginning to redden, pre-cry restlessness",
-  tired:    "heavy eyelids drooping, unfocused gaze, head tilting slightly to the side, lips loosely parted",
-  crying:   "eyes scrunched closed, mouth open mid-wail, face flushed and reddened, tears at the corners of eyes",
-  alert:    "eyes wide open and bright, head held steady, gaze focused directly forward with curiosity",
-  sleeping: "eyes softly closed, face completely relaxed, tiny lips slightly parted, peaceful and still",
+  settled: "eyes open and calm, soft relaxed expression, a small content look, perhaps a faint upward curl at the lips",
+  drowsy:  "heavy eyelids drooping, unfocused gaze, head tilting slightly to the side, lips loosely parted",
+  hungry:  "mouth opening and closing, fists clenched, brow slightly furrowed, face beginning to redden, pre-cry restlessness",
+  fussy:   "brow knit, lips pursed, head turning side to side, low-grade unhappiness, not full crying",
+  crying:  "eyes scrunched closed, mouth open mid-wail, face flushed and reddened, tears at the corners of eyes",
+  sleep:   "eyes softly closed, face completely relaxed, tiny lips slightly parted, peaceful and still",
 };
 
 const BASE_PORTRAIT_PROMPT = [
@@ -62,7 +67,7 @@ const GEMINI_IMAGE_MODELS = [
   "gemini-3-pro-image-preview",
   "gemini-3-image-preview",
   "gemini-2.5-flash-image-preview",
-  "gemini-2.0-flash-preview-image-generation",
+  "gemini-3-pro-image-preview",
 ];
 
 function detectPng(buf: ArrayBuffer): boolean {

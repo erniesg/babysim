@@ -112,13 +112,61 @@ Tone: invisible stage director — never speaks to the player as a character. Ac
 ```
 GET  /api/healthz                          → secrets present + active models
 POST /api/officer                          → gpt-5.5 → say() tool args
+POST /api/officer/say                      → ElevenLabs TTS → audio/mpeg
 POST /api/baby                             → gpt-5.5 → { tools: [{name, args}] } (play_audio / set_caption / trigger_fallback)
+POST /api/baby/sfx                         → ElevenLabs sound-generation → audio/mpeg
+POST /api/baby/portrait                    → Gemini image → image/png (or raw mime if non-PNG)
+POST /api/officer/avatar                   → Gemini image → image/png (or raw mime if non-PNG)
+POST /api/music/probation-theme            → Lyria-002 via Vertex AI → audio/wav
+POST /api/cute-payoff/video                → Veo-3.1 initiate → { operationName, status: "running" }
+GET  /api/cute-payoff/video?operation=...  → Veo-3.1 poll → video bytes or { status: "pending" }
 POST /api/gm                               → gpt-5.5 → { tools: [{name, args}], rejected: [...] } (all DirectorCommand variants; enter_beat BEAT_GRAPH-validated)
 POST /api/realtime/gemini/token            → ephemeral token (or master-key fallback)
 POST /api/realtime/openai/token            → OpenAI Realtime client_secret
 ```
 
 All endpoints CORS-permissive (`*`) for browser direct calls. Every request gets a UUID logged on entry, upstream status + body head logged on response, errors include `upstreamStatus` + `detail` so failures are diagnosable from `wrangler tail` or Cloudflare's observability stream.
+
+## Live media generation endpoints
+
+Five session-time generation endpoints added under `src/worker/handlers/`. All follow the `officer-tts.ts` pattern: single exported handler function, exported `Env` interface, `crypto.randomUUID()` request-id on every call, `console.log` prefixed with `[<handler> <reqId>]`, surfaced upstream errors as `{ error, detail }` JSON, CORS `*` headers on all responses.
+
+| Endpoint | Handler file | Inputs | Provider | Returns | Frontend fallback |
+|---|---|---|---|---|---|
+| `POST /api/baby/sfx` | `baby-sfx.ts` | `{ trigger: "hunger"\|"tired"\|"discomfort"\|"coo", durationSeconds?: 3 }` | ElevenLabs `text_to_sound_v2` | `audio/mpeg`, `cache-control: public, max-age=3600` | Pre-baked clips in `public/audio/baby/{trigger}.mp3` |
+| `POST /api/baby/portrait` | `baby-portrait.ts` | `{ state: BabyVisualState, gender: "girl"\|"boy", traits: BabyTraits, babyName?: string }` | Gemini image (tries `gemini-3-pro-image-preview` → `gemini-3-image-preview` → `gemini-2.5-flash-image-preview` → `gemini-2.0-flash-preview-image-generation`) | `image/png` (or raw JPEG if non-PNG), `cache-control: public, max-age=3600` | Pre-baked PNGs at `public/img/baby/{state}.png` |
+| `POST /api/officer/avatar` | `officer-avatar.ts` | `{ expression: "strict"\|"warm"\|"skeptical"\|"delighted", officer?: "Tan"\|"Lim"\|"Wong" }` | Gemini image (same model waterfall as baby-portrait) | `image/png`, `cache-control: public, max-age=3600` | Pre-baked `public/img/officer-tan-{strict,warm}.png` |
+| `POST /api/music/probation-theme` | `music.ts` | `{ vibe?: "intro"\|"argument"\|"verdict" }` | Lyria-002 via Vertex AI (JWT-signed service-account, `crypto.subtle`) | `audio/wav`, `cache-control: public, max-age=86400` | Pre-baked `public/audio/music/probation-theme.mp3` |
+| `POST /api/cute-payoff/video` (initiate) | `cute-payoff.ts` | `{ babyName: string, gender: "girl"\|"boy" }` | Veo-3.1 via Vertex AI `predictLongRunning` | `{ operationName: string, status: "running" }` (202) | CSS animation in frontend |
+| `GET /api/cute-payoff/video?operation=...` (poll) | `cute-payoff.ts` | `operation` query param | Vertex AI LRO poll | Video bytes (`video/mp4`) when done; `{ status: "pending" }` (202) while running | CSS animation |
+
+### Secrets required
+
+| Secret name | Used by | How to set |
+|---|---|---|
+| `ELEVENLABS_API_KEY` | `baby-sfx.ts`, `officer-tts.ts` | `wrangler secret put ELEVENLABS_API_KEY` |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `baby-portrait.ts`, `officer-avatar.ts` | `wrangler secret put GEMINI_API_KEY` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | `music.ts`, `cute-payoff.ts` | `wrangler secret put GOOGLE_SERVICE_ACCOUNT_JSON` (paste full service-account JSON) |
+
+### Failure modes
+
+- `baby-sfx.ts`: upstream ElevenLabs error → **503** `{ error, detail }`. Frontend falls back to pre-baked.
+- `baby-portrait.ts`: all Gemini models fail → **503**. Frontend uses `public/img/baby/{state}.png`.
+- `officer-avatar.ts`: all Gemini models fail → **503**. Frontend uses pre-baked officer PNGs.
+- `music.ts`: `GOOGLE_SERVICE_ACCOUNT_JSON` unset → **503** with clear message. Auth failure → **503**. Lyria predict failure → **503**. Frontend uses pre-baked MP3 in all cases.
+- `cute-payoff.ts` (initiate): Veo unreachable → **503**. Frontend retains CSS animation.
+- `cute-payoff.ts` (poll): operation error or missing video → **502**. Pending → **202** `{ status: "pending" }`.
+
+### Wiring status
+
+| Endpoint | Status |
+|---|:-:|
+| `POST /api/baby/sfx` | Live — wired |
+| `POST /api/baby/portrait` | Live — wired |
+| `POST /api/officer/avatar` | Live — wired |
+| `POST /api/music/probation-theme` | Live — wired; requires `GOOGLE_SERVICE_ACCOUNT_JSON` secret |
+| `POST /api/cute-payoff/video` (initiate) | Live — wired; requires `GOOGLE_SERVICE_ACCOUNT_JSON` secret |
+| `GET /api/cute-payoff/video` (poll) | Live — wired |
 
 ## Why the Cloudflare Workers shape (vs. Pages)
 
@@ -147,4 +195,8 @@ This is the same shape the Cloudflare Agents SDK uses, and is the path-forward f
 | Baby agent | ✅ Wired at `/api/baby` | gpt-5.5, tool_choice auto, multi-call response, channel locked to "baby", assetId enum-validated |
 | GM agent | ✅ Wired at `/api/gm` | gpt-5.5, tool_choice auto, 7 DirectorCommand tools, server-side BEAT_GRAPH transition validation, `{ tools, rejected }` response shape |
 | GameSessionDO (multiplayer) | ❌ Not started | Adds two-player rooms, partner-as-second-player, observability |
-| Veo-3.1 cute-payoff video | ❌ Not started | Currently CSS animation; pre-gen pipeline already exists for music+images |
+| Baby SFX live generation (`/api/baby/sfx`) | ✅ Wired | ElevenLabs `text_to_sound_v2`; frontend falls back to pre-baked clips |
+| Baby portrait live generation (`/api/baby/portrait`) | ✅ Wired | Gemini image model waterfall; frontend falls back to pre-baked PNGs |
+| Officer avatar live generation (`/api/officer/avatar`) | ✅ Wired | Gemini image model waterfall; frontend falls back to pre-baked PNGs |
+| Probation-theme music (`/api/music/probation-theme`) | ✅ Wired | Lyria-002 via Vertex AI (JWT service-account); returns WAV; frontend falls back to pre-baked MP3 |
+| Veo-3.1 cute-payoff video | ✅ Wired (initiate + poll) | Async 2-step: POST initiates, GET polls. Frontend CSS animation remains fallback. |

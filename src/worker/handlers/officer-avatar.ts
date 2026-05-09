@@ -47,7 +47,7 @@ const GEMINI_IMAGE_MODELS = [
   "gemini-3-pro-image-preview",
   "gemini-3-image-preview",
   "gemini-2.5-flash-image-preview",
-  "gemini-2.0-flash-preview-image-generation",
+  "gemini-3-pro-image-preview",
 ];
 
 function detectPng(buf: ArrayBuffer): boolean {

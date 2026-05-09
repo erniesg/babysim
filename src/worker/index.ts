@@ -7,9 +7,28 @@ import { geminiTokenHandler, type GeminiTokenEnv } from "./handlers/realtime-gem
 import { openaiTokenHandler, type OpenAITokenEnv } from "./handlers/realtime-openai-token";
 import { babyAgent, type BabyEnv } from "./handlers/baby";
 import { gmAgent, type GMEnv } from "./handlers/gm";
+import { babySfxHandler, type BabySfxEnv } from "./handlers/baby-sfx";
+import { babyPortraitHandler, type BabyPortraitEnv } from "./handlers/baby-portrait";
+import { officerAvatarHandler, type OfficerAvatarEnv } from "./handlers/officer-avatar";
+import { musicHandler, type MusicEnv } from "./handlers/music";
+import { cutePayoffHandler, type CutePayoffEnv } from "./handlers/cute-payoff";
 
 // GMEnv is an alias of OfficerEnv (same OPENAI_API_KEY + OPENAI_TEXT_MODEL).
-interface Env extends OfficerEnv, ElevenLabsEnv, GeminiTokenEnv, OpenAITokenEnv, BabyEnv, GMEnv {
+// BabySfxEnv extends ElevenLabsEnv (same ELEVENLABS_API_KEY).
+// BabyPortraitEnv and OfficerAvatarEnv share GEMINI_API_KEY / GOOGLE_API_KEY.
+// MusicEnv and CutePayoffEnv share GOOGLE_SERVICE_ACCOUNT_JSON.
+interface Env
+  extends OfficerEnv,
+    ElevenLabsEnv,
+    GeminiTokenEnv,
+    OpenAITokenEnv,
+    BabyEnv,
+    GMEnv,
+    BabySfxEnv,
+    BabyPortraitEnv,
+    OfficerAvatarEnv,
+    MusicEnv,
+    CutePayoffEnv {
   ASSETS: Fetcher;
 }
 
@@ -54,10 +73,16 @@ export default {
 
     if (path === "/api/officer" && method === "POST") return officerAgent(request, env);
     if (path === "/api/officer/say" && method === "POST") return officerTtsHandler(request, env);
+    if (path === "/api/officer/avatar" && method === "POST") return officerAvatarHandler(request, env);
     if (path === "/api/realtime/gemini/token" && method === "POST") return geminiTokenHandler(request, env);
     if (path === "/api/realtime/openai/token" && method === "POST") return openaiTokenHandler(request, env);
     if (path === "/api/baby" && method === "POST") return babyAgent(request, env);
+    if (path === "/api/baby/sfx" && method === "POST") return babySfxHandler(request, env);
+    if (path === "/api/baby/portrait" && method === "POST") return babyPortraitHandler(request, env);
     if (path === "/api/gm" && method === "POST") return gmAgent(request, env);
+    if (path === "/api/music/probation-theme" && method === "POST") return musicHandler(request, env);
+    // cute-payoff handles both POST (initiate) and GET (poll) internally
+    if (path === "/api/cute-payoff/video") return cutePayoffHandler(request, env);
 
     if (path.startsWith("/api/")) {
       return new Response(JSON.stringify({ error: "not_found", path }), {
