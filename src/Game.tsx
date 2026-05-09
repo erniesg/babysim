@@ -19,6 +19,7 @@ import { AudioDirector } from "./audio/AudioDirector";
 import type { MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
 import { llmOfficerLine, isOfficerAgentEnabled } from "./llm/officer-agent";
 import { fetchOfficerVoiceUrl, isElevenLabsOfficerVoiceEnabled } from "./llm/officer-voice";
+import { callBabyAgent, isBabyAgentEnabled, isGameplayBeat } from "./llm/baby-agent";
 import { RealtimePartner } from "./components/RealtimePartner";
 import type { PartnerToolCall } from "./realtime/types";
 
@@ -120,6 +121,8 @@ export function Game() {
   // Live transcript of whatever the officer (or any speaker) is saying right now.
   // Replaces the static beat caption during cinematic officer beats.
   const [liveOfficerText, setLiveOfficerText] = useState<string | null>(null);
+  // Live caption-hint from the Baby agent (gpt-5.5) — surfaced near the baby visual.
+  const [babyHint, setBabyHint] = useState<string | null>(null);
 
   // Bootstrap transport + audio.
   useEffect(() => {
@@ -156,12 +159,40 @@ export function Game() {
     (action: GameAction) => {
       audioRef.current?.unlock();
       muppetRef.current?.unlockSpeech();
-      // Sing routes through the mic capture modal so the player gets the audio-analysis beat.
       if (action === "sing") {
         setSingOpen(true);
         return;
       }
       send({ type: "action", action });
+
+      // Fire the Baby agent in parallel during gameplay beats — gpt-5.5 reads
+      // the player action vs the hidden traits and emits play_audio / set_caption tool calls.
+      // The deterministic engine has already dispatched its own state delta.
+      const liveState = transportRef.current?.getRuntime().getState();
+      if (
+        isBabyAgentEnabled() &&
+        liveState &&
+        isGameplayBeat(liveState.beatId) &&
+        ["feed", "rock", "shush", "hold", "check_diaper", "adjust_temperature", "reposition", "wait"].includes(action)
+      ) {
+        callBabyAgent(liveState.baby, liveState.beatId, liveState.eventLog, action).then((resp) => {
+          if (!resp || !resp.tools?.length) return;
+          for (const tool of resp.tools) {
+            if (tool.name === "play_audio") {
+              audioRef.current?.handle({
+                type: "play_audio",
+                channel: "baby",
+                assetId: tool.args.assetId,
+                loop: Boolean(tool.args.loop),
+              });
+            } else if (tool.name === "set_caption") {
+              setBabyHint(tool.args.text);
+              // Auto-clear after 6s so the next action can replace cleanly.
+              setTimeout(() => setBabyHint((cur) => (cur === tool.args.text ? null : cur)), 6000);
+            }
+          }
+        });
+      }
     },
     [send],
   );
@@ -313,11 +344,16 @@ export function Game() {
             )}
 
             {showBaby && (
-              <BabyVisual
-                visualState={render.baby.visualState}
-                name={render.baby.name}
-                mood={render.baby.mood}
-              />
+              <>
+                <BabyVisual
+                  visualState={render.baby.visualState}
+                  name={render.baby.name}
+                  mood={render.baby.mood}
+                />
+                {babyHint && (
+                  <p className="baby-hint" aria-live="polite">{babyHint}</p>
+                )}
+              </>
             )}
 
             {/* Live officer transcript replaces the static beat caption during officer beats. */}

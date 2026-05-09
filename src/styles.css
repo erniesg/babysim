@@ -171,6 +171,23 @@ h1 {
   color: var(--fg);
 }
 
+.baby-hint {
+  margin: 0;
+  padding: 10px 14px;
+  background: rgba(20, 8, 6, 0.7);
+  border-left: 2px solid var(--gold);
+  border-radius: 8px;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--fg);
+  animation: hint-fade-in 0.3s ease-out;
+}
+
+@keyframes hint-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes subtitle-fade-in {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
