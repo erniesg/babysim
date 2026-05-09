@@ -21,10 +21,10 @@ The spine is fixed for demo reliability. The details inside each beat are dynami
 | `time_jump_evening` | `gameplay` | Continue | Time accelerates; baby cycles through sleep/hunger. |
 | `night_cry` | `night` | Get up / shirk / wake partner / wait | Screen darkens, partner asleep, cry audio starts. |
 | `shirk_or_wake` | `night` | Choose responsibility path | Ledger updates; partner resentment/fatigue responds. |
-| `argument_start` | `argument` | Get up / comfort / shirk | Partner argument line appears; Realtime can replace later. |
+| `argument_start` | `argument` | Get up / comfort / shirk | Partner argument line appears; realtime mic session opens (Gemini Flash Live default; OpenAI Realtime swap via `VITE_REALTIME_PARTNER_PROVIDER=openai`). |
 | `argument_resolution` | `argument` | Resolve shift | Player or partner takes the night shift. |
 | `night_soothe` | `night` | Soothe baby | Baby still needs care after the argument. |
-| `cute_payoff` | `cute` | Continue | Placeholder image/CSS moment now; generated clip later. |
+| `cute_payoff` | `cute` | Continue | CSS payoff animation; live Veo-3.1 video via `/api/cute-payoff/video` (LRO) is wired with the CSS as fallback. |
 | `verdict` | `verdict` | Continue | Officer returns with verdict. |
 | `debrief_card` | `debrief` | Replay/share | Shows baby traits, player archetype, partner dynamic, and ledger. |
 

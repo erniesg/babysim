@@ -9,7 +9,7 @@ Latest deploy: `e584fa6c-3de0-49de-bfed-4cf8973c0840`. 152/152 engine tests pass
 A 2-minute multi-agent improv simulator on Cloudflare Workers. Three LLM-driven characters share the stage:
 
 - **Officer** (`gpt-5.5`) — Three.js muppet, ElevenLabs voice. Tools: `say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input`. Drives the cinematic intake.
-- **Baby** (`gpt-5.5`) — 2.5D layered PuppetCanvas, ElevenLabs SFX (now seeded with babysteps "same-baby-pack" MP3s). Tools: `play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`. Probabilistic reactions modulated by hidden traits.
+- **Baby** (`gpt-5.5`) — 2.5D layered PuppetCanvas, real recorded baby cries from the donateacry public dataset (hunger / tired / discomfort / burp). Tools (8): `play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`, `trigger_fallback`. Reducer-modulated reactions via the rolled `soothing` trait (`SOOTHING_AFFINITY` table).
 - **Partner** (`gemini-3.1-flash-lite` for text, `gemini-3.1-flash-live-preview` for argument-beat realtime mic) — scripted-line floor + live-text override per beat. Realtime mic during arguments only.
 
 Engine reducer (`src/engine/reducer.ts`) is authoritative. Agent tool calls are CONSULTATIVE — the runtime applies them through validated events, not direct mutation. `BEAT_GRAPH` (`contracts/beats.ts`) gates beat transitions.
@@ -30,7 +30,7 @@ Engine reducer (`src/engine/reducer.ts`) is authoritative. Agent tool calls are 
 - **Officer intro split**: short identification line (`OFFICER_INTRO_LINE1`) → 250 ms hold → wave + snap → 650 ms → music → 450 ms → second line (`OFFICER_INTRO_LINE2`) → scene_ack. Both lines voiced via ElevenLabs if enabled.
 - **Trait-modulated baby reducer**: `SOOTHING_AFFINITY` table multiplies action effects by rolled `soothing` style (motion / sound / contact / silence). Discovered traits accumulate in `baby.discoveredTraits` for the debrief.
 - **Partner scripted lines** extended to all gameplay beats (baby_arrival, first_calm, first_cry, discovery_soothing, time_jump_evening, night_cry, cute_payoff, verdict) × 4 archetypes.
-- **Baby sounds** swapped from ElevenLabs `text_to_sound_v2` to babysteps "same-baby-pack" MP3s (real cooed/fussed audio of a single baby). Old files in `public/audio/baby/_archive/`.
+- **Baby sounds** swapped from ElevenLabs `text_to_sound_v2` to recordings from the **donateacry** public dataset (categories: hungry / tired / discomfort / burping → mapped to `babyAudio.{hunger,tired,discomfort,coo}`). Real recorded baby cries — much more authentic than text-to-sound. Old ElevenLabs + intermediate same-baby-pack versions kept in `public/audio/baby/_archive/`.
 
 ### Agent tool surfaces (this round's headline)
 - `src/worker/handlers/officer.ts` exposes 7 tools to gpt-5.5; `src/llm/officer-agent.ts` returns parsed `tools[]`; `src/Game.tsx` dispatches each.
@@ -153,7 +153,7 @@ src/worker/handlers/
 ├── baby.ts              ← 7-tool schema
 ├── partner-line.ts      ← NEW Gemini Flash partner-line handler
 contracts/beats.ts       ← trimmed timeouts, first_cry safety net
-public/audio/baby/       ← swapped to babysteps same-baby-pack MP3s
+public/audio/baby/       ← donateacry public-dataset MP3s (hunger/tired/discomfort/coo); _archive/ has prior versions
 public/img/logos/        ← NEW openai/codex/cloudflare/google/gemini/elevenlabs SVGs
 public/puppets/baby/     ← canonical rig (gpt-image-2 + 14 landmark-aligned layers)
 ```

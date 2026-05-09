@@ -1,6 +1,6 @@
 # Baby animation — 2.5D layered puppet approach
 
-Implementation guide for `src/baby-rig/PuppetCanvas.tsx`. Implement directly. No external project credits — this is original work.
+Design reference for `src/baby-rig/PuppetCanvas.tsx` (shipped). The canonical rig at `public/puppets/baby/` has 1 manifest + 14 layer PNGs (face_backplate + 6 eye states + 7 mouth states). The component implements vignette, cross-faded transitions, per-state idle motion, blink, and an exposed mouth-aperture hook. Use this doc when extending the rig or porting it to a Generate-path pipeline.
 
 ## Concept
 

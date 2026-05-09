@@ -151,23 +151,31 @@ babysim/
 │  ├─ director-commands.ts    Agent → runtime tool-call schema
 │  └─ messages.ts             ClientMessage / ServerMessage transport types
 ├─ src/
-│  ├─ engine/                 Pure-function reducer + Director Runtime + transports
-│  │   └─ __tests__/          76 vitest tests
+│  ├─ engine/                 Pure-function reducer + Director Runtime + transports + agent dispatch
+│  │   └─ __tests__/          152 vitest tests
 │  ├─ realtime/               Gemini Live + OpenAI Realtime adapters behind one interface
-│  ├─ llm/                    Officer agent (browser → Worker)
-│  ├─ muppet/                 Three.js officer puppet rig (Ernest/Bern/Crumb characters)
-│  ├─ audio/                  AudioDirector — channel-keyed playback, music + SFX one-shots
+│  ├─ llm/                    Browser-side clients for the agent endpoints (officer / baby / partner)
+│  ├─ muppet/                 Three.js officer puppet rig (Ernest/Bern/Crumb characters, badge logo cycle)
+│  ├─ baby-rig/               PuppetCanvas — 2.5D layered-PNG baby rig (vignette, cross-fade, blink, idle motion)
+│  ├─ audio/                  AudioDirector — channel-keyed playback, music + SFX one-shots, Lyria prefetch()
 │  ├─ components/             BabyVisual, NeedsPanel, LedgerPanel, ActionBar, DebriefCard,
-│  │                           PhotoIntake, SingMicCapture, VerificationGames,
-│  │                           CutePayoff, PartnerLine, RealtimePartner
+│  │                           PhotoIntake, SingMicCapture, VerificationGames (verify/RockPaperScissors),
+│  │                           CutePayoff, PartnerLine, RealtimePartner, MicLevelMeter,
+│  │                           OfficerWarning, AdoptOrGenerate, TimeProgressBar, LogoStrip, DebugOverlay
 │  └─ worker/                 Pure Cloudflare Workers handlers
 │      ├─ index.ts            /api/* router + assets fall-through
-│      └─ handlers/           officer.ts, realtime-gemini-token.ts, realtime-openai-token.ts
+│      └─ handlers/           officer.ts, officer-tts.ts, officer-avatar.ts,
+│                              baby.ts, baby-sfx.ts, baby-portrait.ts,
+│                              gm.ts, partner-line.ts,
+│                              music.ts, cute-payoff.ts, cinematic.ts,
+│                              realtime-gemini-token.ts, realtime-openai-token.ts
 ├─ public/
-│  ├─ audio/baby/             4 cry clips (hunger, tired, discomfort, coo)
-│  ├─ audio/sfx/snap.mp3
-│  ├─ audio/music/probation-theme.mp3
-│  └─ img/                    officer-tan{,-strict,-warm}.png · partner-{anxious,chill,resentful,overfunctioner}.png
+│  ├─ audio/baby/             4 cry clips (hunger, tired, discomfort, coo) — donateacry public-dataset MP3s
+│  ├─ audio/sfx/              snap.mp3 etc.
+│  ├─ audio/music/            probation-theme.mp3 (Lyria-002 pre-bake; live regen via /api/music/probation-theme)
+│  ├─ img/                    officer-{ernest,bern,crumb,tan}-{strict,warm,skeptical,delighted}.{png,svg} · partner-{anxious,chill,resentful,overfunctioner}.png · logos/{openai,codex,cloudflare,google,gemini,elevenlabs}.svg
+│  ├─ puppets/baby/           canonical 2.5D rig — puppet.json + 14 layer PNGs
+│  └─ video/baby/             Seedance-pregenerated state-transition + idle clips
 ├─ scripts/                   Idempotent generation pipelines
 ├─ docs/
 │  ├─ 00-build-brief.md  01-demo-loop.md  02-architecture.md
@@ -236,4 +244,4 @@ See [`AGENTS.md`](AGENTS.md) for the full non-negotiables list.
 
 ## Credits
 
-Built as a hackathon multi-agent improv simulator on Cloudflare Workers, with gpt-5.5, Gemini Flash Live, OpenAI Realtime, ElevenLabs, Lyria-002, Seedance 2.0, Veo-3.1-fast, and Replicate's `openai/gpt-image-2`.
+Built as a hackathon multi-agent improv simulator on Cloudflare Workers, with `gpt-5.5`, Gemini Flash Live + Flash Lite, OpenAI Realtime, ElevenLabs (TTS + `text_to_sound_v2`), Lyria-002, Seedance 2.0, Veo-3.1-fast, fal.ai (`flux-pro`, `kling-v3-pro`), Replicate's `openai/gpt-image-2`, and donateacry public-dataset cry recordings.

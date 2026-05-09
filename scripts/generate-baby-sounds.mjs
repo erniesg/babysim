@@ -11,6 +11,16 @@ const OUT_DIR = path.join(REPO_ROOT, 'public', 'audio', 'baby');
 const TMP_DIR = path.join(REPO_ROOT, 'tmp', 'baby-sounds');
 // Optional fallback directory for pre-baked baby audio packs (out-of-tree).
 // Set BABY_SOUNDS_FALLBACK_DIR in the env if you have a local pre-baked pack to copy from.
+//
+// NOTE: the live files in public/audio/baby/ shipped today are NOT generated
+// by this script — they're real recordings from the donateacry public dataset
+// (hungry / tired / discomfort / burping → mapped to hunger / tired /
+// discomfort / coo). This script is a regenerator: it can re-emit synthetic
+// cries via Gemini TTS or ElevenLabs (lower fidelity), and the
+// `fallbackSource` filenames below reference an older "same-baby-pack" naming
+// convention used when this regenerator pulls from a fallback dir. To
+// re-import donateacry, copy the canonical files directly from the dataset
+// dir (see HANDOFF.md → "Baby sounds").
 const FALLBACK_DIR = process.env.BABY_SOUNDS_FALLBACK_DIR
   ? path.resolve(process.env.BABY_SOUNDS_FALLBACK_DIR)
   : null;

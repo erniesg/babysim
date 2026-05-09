@@ -10,7 +10,7 @@ BabySim is a short, seeded newborn-care simulator. It tests care labor, communic
 
 The player experiences:
 
-- Bureaucratic probation framing through Officer Tan or a fallback officer.
+- Bureaucratic probation framing through one of the seeded officers (Ernest / Bern / Crumb) with a static fallback.
 - Photo-theater intake and fake generation progress.
 - A randomized baby with hidden traits.
 - A randomized partner with fatigue, resentment, and conflict behavior.
