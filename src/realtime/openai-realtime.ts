@@ -15,6 +15,13 @@ type EphemeralKeyResponse = {
   model: string;
 };
 
+type RealtimeServerEvent = { type: string; [k: string]: unknown };
+
+type ParsedRealtimeToolCall = {
+  callId?: string;
+  call: PartnerToolCall;
+};
+
 // Function definitions matching the Gemini Live tool surface 1:1 so the
 // reducer dispatch (Game.tsx) handles either provider transparently.
 const PARTNER_TOOLS = [
@@ -88,6 +95,40 @@ function voiceForArchetype(archetype: PartnerSessionConfig["archetype"]): string
   }
 }
 
+function parseArgs(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string" || raw.trim() === "") return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function parseOpenAIRealtimeToolCall(evt: RealtimeServerEvent): ParsedRealtimeToolCall | null {
+  if (evt.type === "response.function_call_arguments.done") {
+    const name = typeof evt.name === "string" ? evt.name : "";
+    if (!name) return null;
+    return {
+      callId: typeof evt.call_id === "string" ? evt.call_id : undefined,
+      call: { name, args: parseArgs(evt.arguments) } as PartnerToolCall,
+    };
+  }
+
+  if (evt.type === "response.output_item.done") {
+    const item = evt.item as { type?: unknown; name?: unknown; arguments?: unknown; call_id?: unknown } | undefined;
+    if (!item || item.type !== "function_call" || typeof item.name !== "string") return null;
+    return {
+      callId: typeof item.call_id === "string" ? item.call_id : undefined,
+      call: { name: item.name, args: parseArgs(item.arguments) } as PartnerToolCall,
+    };
+  }
+
+  return null;
+}
+
 export const createOpenAIRealtimePartner: CreatePartnerSession = (
   config: PartnerSessionConfig,
 ): RealtimePartnerSession => {
@@ -97,6 +138,7 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (
   let micStream: MediaStream | null = null;
   let opened = false;
   let textBuffer = "";
+  const emittedToolCalls = new Set<string>();
 
   function emit(e: PartnerEvent) {
     for (const h of handlers) h(e);
@@ -143,6 +185,19 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (
     dc.send(JSON.stringify({ type: "response.create" }));
   }
 
+  function acknowledgeToolCall(callId: string | undefined, name: string) {
+    if (!callId || !dc || dc.readyState !== "open") return;
+    dc.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: JSON.stringify({ ok: true, applied: name }),
+      },
+    }));
+    dc.send(JSON.stringify({ type: "response.create" }));
+  }
+
   async function start(): Promise<void> {
     const key = await fetchKey();
     log("opening WebRTC peer connection", { model: key.model });
@@ -172,26 +227,27 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (
     };
     dc.onmessage = (ev) => {
       try {
-        const evt = JSON.parse(ev.data) as { type: string; [k: string]: unknown };
+        const evt = JSON.parse(ev.data) as RealtimeServerEvent;
         const t = evt.type;
+        const parsedTool = parseOpenAIRealtimeToolCall(evt);
 
-        if (t === "session.created" && !opened) {
+        if (parsedTool) {
+          if (parsedTool.callId && emittedToolCalls.has(parsedTool.callId)) return;
+          if (parsedTool.callId) emittedToolCalls.add(parsedTool.callId);
+          log("tool call", { name: parsedTool.call.name, args: parsedTool.call.args });
+          emit({ type: "tool_call", call: parsedTool.call });
+          acknowledgeToolCall(parsedTool.callId, parsedTool.call.name);
+        } else if (t === "session.created" && !opened) {
           opened = true;
           emit({ type: "open" });
-        } else if (t === "response.audio_transcript.delta" || t === "response.text.delta") {
+        } else if (t === "response.audio_transcript.delta" || t === "response.text.delta" || t === "response.output_text.delta") {
           const d = String(evt.delta ?? "");
           textBuffer += d;
           if (d) emit({ type: "text_delta", text: d });
-        } else if (t === "response.audio_transcript.done" || t === "response.text.done") {
+        } else if (t === "response.audio_transcript.done" || t === "response.text.done" || t === "response.output_text.done") {
           const text = String(evt.transcript ?? evt.text ?? textBuffer);
           if (text) emit({ type: "text_complete", text });
           textBuffer = "";
-        } else if (t === "response.function_call_arguments.done") {
-          const name = String(evt.name ?? "");
-          let args: Record<string, unknown> = {};
-          try { args = JSON.parse(String(evt.arguments ?? "{}")) as Record<string, unknown>; } catch { /* noop */ }
-          log("tool call", { name, args });
-          emit({ type: "tool_call", call: { name, args } as PartnerToolCall });
         } else if (t === "error") {
           const msg = (evt.error as { message?: string } | undefined)?.message ?? "openai realtime error";
           log("server error", evt);

@@ -366,6 +366,10 @@ function _reducer(state: GameState, event: GameEvent): GameState {
     const needsDelta = event.payload?.needsDelta as Partial<Omit<BabyNeeds, "mood">> | undefined;
     const hoursDelta = event.payload?.hoursDelta as number | undefined;
     const partnerAsleep = event.payload?.partnerAsleep as boolean | undefined;
+    const partnerDelta = event.payload?.partnerDelta as
+      | Partial<Pick<GameState["partner"], "mood" | "fatigue" | "resentment" | "isAsleep">>
+      | undefined;
+    const ledgerDelta = event.payload?.ledgerDelta as Partial<FairnessLedger> | undefined;
 
     let next = { ...state };
 
@@ -387,6 +391,26 @@ function _reducer(state: GameState, event: GameEvent): GameState {
       next = {
         ...next,
         partner: { ...next.partner, isAsleep: partnerAsleep },
+      };
+    }
+
+    if (partnerDelta) {
+      next = {
+        ...next,
+        partner: {
+          ...next.partner,
+          mood: clamp(next.partner.mood + (partnerDelta.mood ?? 0)),
+          fatigue: clamp(next.partner.fatigue + (partnerDelta.fatigue ?? 0)),
+          resentment: clamp(next.partner.resentment + (partnerDelta.resentment ?? 0)),
+          isAsleep: typeof partnerDelta.isAsleep === "boolean" ? partnerDelta.isAsleep : next.partner.isAsleep,
+        },
+      };
+    }
+
+    if (ledgerDelta) {
+      next = {
+        ...next,
+        ledger: applyLedgerDelta(next.ledger, ledgerDelta),
       };
     }
 

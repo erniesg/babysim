@@ -1,5 +1,6 @@
 // Provider-neutral interface for the realtime partner-voice session.
-// Backed by Gemini Flash Live first; OpenAI Realtime is a drop-in alternative.
+// OpenAI Realtime is the demo-stable default; Gemini Flash Live uses the same
+// interface once Vertex Live API auth is available in the target project.
 
 import type { PartnerTraits } from "@contracts/game-state";
 

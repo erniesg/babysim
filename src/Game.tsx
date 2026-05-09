@@ -1126,12 +1126,20 @@ export function Game() {
                 onToolCall={(call: PartnerToolCall) => {
                   // Map partner tool calls back into game actions.
                   if (call.name === "concede_argument" || call.name === "take_night_shift") {
+                    send({ type: "agent_partner_tool", tool: call.name });
                     setRealtimeOpen(false);
                     send({ type: "action", action: "comfort_partner" });
                   } else if (call.name === "refuse_night_shift") {
                     // Player still has to get up.
+                    send({ type: "agent_partner_tool", tool: "refuse_night_shift" });
                     setRealtimeOpen(false);
                     send({ type: "action", action: "get_up" });
+                  } else if (call.name === "raise_resentment") {
+                    send({
+                      type: "agent_partner_tool",
+                      tool: "raise_resentment",
+                      delta: typeof call.args.delta === "number" ? call.args.delta : undefined,
+                    });
                   }
                 }}
               />

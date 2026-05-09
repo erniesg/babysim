@@ -657,6 +657,16 @@ describe("LocalGameTransport", () => {
     const sceneChange = msgs.find((m) => m.type === "scene_change" && (m as { beatId: string }).beatId === "verdict");
     expect(sceneChange).toBeDefined();
   });
+
+  it("partner realtime take_night_shift tool increments partner ledger via reducer", () => {
+    let lastState: GameState | null = null;
+    const transport = new LocalGameTransport("sess-5", "seed-5");
+    transport.subscribe((m) => {
+      if (m.type === "state") lastState = m.state;
+    });
+    transport.send({ type: "agent_partner_tool", tool: "take_night_shift" });
+    expect((lastState as unknown as GameState).ledger.partnerNightShifts).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -684,6 +694,20 @@ describe("fairness ledger via reducer", () => {
     let state = makeMinimalState("night_cry");
     state = reducer(state, makeEvent("ACTION", "player", "get_up"));
     expect(state.ledger.playerNightShifts).toBe(1);
+  });
+
+  it("STATE_CHANGED partner deltas clamp resentment and apply ledger deltas", () => {
+    let state = makeMinimalState("argument_start");
+    state = {
+      ...state,
+      partner: { ...state.partner, resentment: 94 },
+    };
+    state = reducer(state, makeEvent("STATE_CHANGED", "partner", undefined, {
+      partnerDelta: { resentment: 25 },
+      ledgerDelta: { partnerNightShifts: 1 },
+    }));
+    expect(state.partner.resentment).toBe(100);
+    expect(state.ledger.partnerNightShifts).toBe(1);
   });
 });
 

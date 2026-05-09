@@ -3,6 +3,7 @@ import path from "node:path";
 
 export default defineConfig({
   resolve: {
+    extensions: [".ts", ".tsx", ".mjs", ".js", ".mts", ".jsx", ".json"],
     alias: {
       "@contracts": path.resolve(__dirname, "contracts"),
       "@engine": path.resolve(__dirname, "src/engine"),
