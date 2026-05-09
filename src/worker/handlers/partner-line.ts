@@ -29,6 +29,9 @@ type RequestBody = {
     traits: { temperament: string; soothing: string };
   };
   recentEvents: GameEvent[];
+  // Optional player-typed message — when present, the partner is responding
+  // to it directly (chat-style) rather than just emitting a beat reaction.
+  userMessage?: string;
 };
 
 type SayLineArgs = {
@@ -134,7 +137,12 @@ function buildUserMessage(body: RequestBody): string {
     parts.push(`Recent events: ${summaries.join(", ")}`);
   }
 
-  parts.push("Call say_line() once with the partner's reaction to this beat.");
+  if (body.userMessage && body.userMessage.trim().length > 0) {
+    parts.push(`The player just said to you: "${body.userMessage.trim().slice(0, 600)}"`);
+    parts.push("Call say_line() with the partner's direct reply to that line. Stay in archetype.");
+  } else {
+    parts.push("Call say_line() once with the partner's reaction to this beat.");
+  }
   return parts.join("\n");
 }
 

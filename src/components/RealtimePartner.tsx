@@ -18,6 +18,9 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("connecting");
   const [transcript, setTranscript] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [textInput, setTextInput] = useState("");
+  const [chatLog, setChatLog] = useState<Array<{ who: "you" | "partner"; text: string }>>([]);
+  const [sending, setSending] = useState(false);
   const sessionRef = useRef<RealtimePartnerSession | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const playQueueTimeRef = useRef(0);
@@ -146,6 +149,59 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
     }
   }
 
+  // Send a typed line to the partner. If the realtime WS is open, route
+  // through it (sendText). Otherwise fall back to the /api/partner/line
+  // text endpoint so the player can still chat even when the live socket
+  // failed (master-key 1000 close, mic blocked, etc).
+  async function sendTextLine() {
+    const text = textInput.trim();
+    if (!text || sending) return;
+    setTextInput("");
+    setChatLog((log) => [...log, { who: "you", text }]);
+    setSending(true);
+
+    if (phase === "live" && sessionRef.current) {
+      try {
+        sessionRef.current.sendText(text);
+        setSending(false);
+        return;
+      } catch { /* fall through to text endpoint */ }
+    }
+
+    try {
+      const res = await fetch("/api/partner/line", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          beatId,
+          partner: {
+            name: state.partner.name,
+            traits: state.partner.traits,
+            mood: state.partner.mood,
+            fatigue: state.partner.fatigue,
+            resentment: state.partner.resentment,
+          },
+          ledger: state.ledger,
+          baby: {
+            name: state.baby.name,
+            traits: { temperament: state.baby.traits.temperament, soothing: state.baby.traits.soothing },
+          },
+          recentEvents: state.eventLog.slice(-5),
+          userMessage: text,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { tools?: Array<{ name?: string; args?: { text?: string } }> };
+        const reply = data.tools?.find((t) => t.name === "say_line")?.args?.text;
+        if (reply) {
+          setChatLog((log) => [...log, { who: "partner", text: reply }]);
+          setTranscript(reply);
+        }
+      }
+    } catch { /* network failure — drop silently, the chat log shows the player's message */ }
+    setSending(false);
+  }
+
   function playPcmChunk(audioCtx: AudioContext, buf: ArrayBuffer) {
     // Gemini Live returns 24kHz s16le PCM by default.
     const i16 = new Int16Array(buf);
@@ -189,8 +245,44 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
         </div>
       )}
       {transcript && <p className="realtime-transcript">"{transcript}"</p>}
+
+      {/* Chat log + text input — always available. When the WS is live, the
+       * input routes through sendText; when it's not (connecting / error /
+       * mic blocked), it falls back to the /api/partner/line REST endpoint
+       * so the player can still get a response. */}
+      {chatLog.length > 0 && (
+        <div className="realtime-chatlog">
+          {chatLog.map((m, i) => (
+            <p key={i} className={`realtime-chat-line realtime-chat-${m.who}`}>
+              <span className="realtime-chat-who">{m.who === "you" ? "You" : state.partner.name}:</span>{" "}
+              {m.text}
+            </p>
+          ))}
+        </div>
+      )}
+      <form
+        className="realtime-text-form"
+        onSubmit={(e) => { e.preventDefault(); void sendTextLine(); }}
+      >
+        <input
+          type="text"
+          className="realtime-text-input"
+          placeholder={phase === "live" ? `Type to ${state.partner.name}…` : `Mic offline — type to ${state.partner.name}`}
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          disabled={sending}
+          maxLength={400}
+        />
+        <button type="submit" className="realtime-text-send" disabled={sending || textInput.trim().length === 0}>
+          {sending ? "…" : "Send"}
+        </button>
+      </form>
+
       {phase === "live" && (
-        <p className="dim small">Speak directly. {state.partner.name} can take/refuse the night shift, concede, or raise resentment. Tool calls update the ledger live.</p>
+        <p className="dim small">Speak directly OR type. {state.partner.name} can take/refuse the night shift, concede, or raise resentment. Tool calls update the ledger live.</p>
+      )}
+      {phase !== "live" && (
+        <p className="dim small">Live voice unavailable — typing routes through the partner agent (no voice, but state still updates).</p>
       )}
     </div>
   );

@@ -8,6 +8,7 @@ import { openaiTokenHandler, type OpenAITokenEnv } from "./handlers/realtime-ope
 import { babyAgent, type BabyEnv } from "./handlers/baby";
 import { gmAgent, type GMEnv } from "./handlers/gm";
 import { babySfxHandler, type BabySfxEnv } from "./handlers/baby-sfx";
+import { sfxHandler, type SfxEnv } from "./handlers/sfx";
 import { babyPortraitHandler, type BabyPortraitEnv } from "./handlers/baby-portrait";
 import { officerAvatarHandler, type OfficerAvatarEnv } from "./handlers/officer-avatar";
 import { musicHandler, type MusicEnv } from "./handlers/music";
@@ -29,6 +30,7 @@ interface Env
     BabyEnv,
     GMEnv,
     BabySfxEnv,
+    SfxEnv,
     BabyPortraitEnv,
     OfficerAvatarEnv,
     MusicEnv,
@@ -85,6 +87,7 @@ export default {
     if (path === "/api/realtime/openai/token" && method === "POST") return openaiTokenHandler(request, env);
     if (path === "/api/baby" && method === "POST") return babyAgent(request, env);
     if (path === "/api/baby/sfx" && method === "POST") return babySfxHandler(request, env);
+    if (path === "/api/sfx" && method === "POST") return sfxHandler(request, env);
     if (path === "/api/baby/portrait" && method === "POST") return babyPortraitHandler(request, env);
     if (path === "/api/gm" && method === "POST") return gmAgent(request, env);
     if (path === "/api/music/probation-theme" && method === "POST") return musicHandler(request, env);
