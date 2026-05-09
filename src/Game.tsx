@@ -27,6 +27,7 @@ import type { MuppetCharacter, MuppetExpression, MuppetGesture, OfficerVoiceProf
 import { llmOfficerBeat, isOfficerAgentEnabled, type OfficerToolCall } from "./llm/officer-agent";
 import { fetchOfficerVoiceUrl, isElevenLabsOfficerVoiceEnabled } from "./llm/officer-voice";
 import { callBabyAgent, isBabyAgentEnabled, isGameplayBeat } from "./llm/baby-agent";
+import { callGmAgent, gmToolToDirectorCommand, isGmAgentEnabled } from "./llm/gm-agent";
 import { callPartnerAgent, isPartnerLiveTextEnabled, isPartnerLiveBeat } from "./llm/partner-agent";
 import { RealtimePartner } from "./components/RealtimePartner";
 import type { PartnerToolCall } from "./realtime/types";
@@ -185,6 +186,8 @@ export function Game() {
   const officerWarningFiredRef = useRef<Set<string>>(new Set());
   // Throttle: last beat for which baby agent was called on BEAT_ENTERED (one call per beat).
   const lastAgentBeatRef = useRef<string>("");
+  // Throttle: last session+beat for which the GM agent was consulted.
+  const lastGmBeatRef = useRef<string>("");
   // Live partner line from Gemini text — overrides scripted line when present.
   const [livePartnerLine, setLivePartnerLine] = useState<string | null>(null);
   // Throttle: track last beat where we fired partner line to fire exactly once per beat entry.
@@ -682,6 +685,41 @@ export function Game() {
       }
     });
   }, [render?.beatId, render?.partner.visible, state]);
+
+  // ── GM agent BEAT_ENTERED trigger ─────────────────────────────────────────
+  // Consults /api/gm once per beat entry. Returned DirectorCommands go through
+  // DirectorRuntime.executeCommand(), which keeps graph validation and clamped
+  // state changes centralized in the engine.
+  useEffect(() => {
+    if (!state || !render) return;
+    if (!isGmAgentEnabled()) return;
+    if (render.beatId === "home") {
+      lastGmBeatRef.current = "";
+      return;
+    }
+
+    const key = `${state.sessionId}:${render.beatId}`;
+    if (lastGmBeatRef.current === key) return;
+    lastGmBeatRef.current = key;
+
+    const liveState = transportRef.current?.getRuntime().getState();
+    const runtime = transportRef.current?.getRuntime();
+    if (!liveState || !runtime) return;
+
+    const beatAtCall = liveState.beatId;
+    callGmAgent(beatAtCall, liveState, liveState.eventLog).then((resp) => {
+      if (!resp?.tools?.length) return;
+      const currentRuntime = transportRef.current?.getRuntime();
+      if (!currentRuntime) return;
+      for (const tool of resp.tools) {
+        const cmd = gmToolToDirectorCommand(tool);
+        if (!cmd) continue;
+        currentRuntime.executeCommand(cmd);
+      }
+    });
+  // Depend on beat identity only so the consult happens once per beat entry.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [render?.beatId, state?.sessionId]);
 
 
   // ── Baby cry-channel CUE tracks visualState ──────────────────────────────

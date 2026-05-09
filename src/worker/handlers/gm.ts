@@ -214,6 +214,7 @@ Your job: read the current game state and recent events, then emit the minimum s
 6. **Preserve fallback paths.** If you are uncertain, call trigger_fallback with a clear reason. The deterministic runtime will recover.
 7. **Multiple tool calls per response are fine.** You may set_caption + enter_beat in a single turn.
 8. **Tone is invisible stage direction.** set_caption text is a director's note — terse, present-tense, functional. No flavour prose.
+9. **Do not rush player-gated beats.** On beat-entry consults, if the beat exposes allowed player actions or verification UI, do not call enter_beat just because a next beat exists. Use captions/audio/ask_agent to stabilize the scene; deterministic timeout and player actions will resolve it.
 
 ## Ordering
 
@@ -325,6 +326,7 @@ function buildUserMessage(body: RequestBody): string {
     `## Current game state`,
     `Beat: ${state.beatId} (phase: ${state.phase})`,
     `Hour: ${state.currentHour}`,
+    `Allowed player actions: [${currentBeatSpec?.allowedActions.join(", ") ?? "none"}]`,
     `Possible next beats: [${currentBeatSpec?.possibleNextBeats.join(", ") ?? "none"}]`,
     ``,
     `## Baby`,

@@ -577,6 +577,16 @@ describe("DirectorRuntime", () => {
     expect(sceneChange).toBeUndefined();
   });
 
+  it("executeCommand SET_CAPTION updates render caption", () => {
+    const rt = makeRuntime("first_cry");
+    let caption = "";
+    rt.subscribe((msg) => {
+      if (msg.type === "state") caption = msg.render.caption;
+    });
+    rt.executeCommand({ type: "SET_CAPTION", text: "GM sees the room tilt." });
+    expect(caption).toBe("GM sees the room tilt.");
+  });
+
   it("beat timeout fires fallback beat after timeoutMs", () => {
     const rt = makeRuntime("probation_splash");
     // probation_splash timeoutMs=5000, fallbackBeat=officer_intro

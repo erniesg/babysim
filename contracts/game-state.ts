@@ -139,6 +139,7 @@ export type GameState = {
   officer: OfficerState;
   comfort: ComfortFlags;
   ledger: FairnessLedger;
+  directorCaption?: string;
   eventLog: GameEvent[];
 };
 
@@ -158,4 +159,3 @@ export function deriveMood(needs: Omit<BabyNeeds, "mood">): number {
 export function clamp(value: number, min = 0, max = 100): number {
   return Math.max(min, Math.min(max, value));
 }
-

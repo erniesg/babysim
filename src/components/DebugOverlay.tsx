@@ -14,7 +14,7 @@ import "./DebugOverlay.css";
 
 export type AgentTrace = {
   ts: number;
-  agent: "officer" | "baby" | "partner";
+  agent: "officer" | "baby" | "partner" | "gm";
   status: "called" | "ok" | "fallback" | "error";
   detail?: string;
   tools?: string[];

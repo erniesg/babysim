@@ -34,7 +34,8 @@ function hourToTimeLabel(hour: number): string {
 function projectRenderState(state: GameState): RenderState {
   const beat = BEAT_GRAPH[state.beatId as BeatId];
   const captionCmd = beat?.entryEffects.find((e) => e.type === "SET_CAPTION");
-  const caption = captionCmd && captionCmd.type === "SET_CAPTION" ? captionCmd.text : "";
+  const entryCaption = captionCmd && captionCmd.type === "SET_CAPTION" ? captionCmd.text : "";
+  const caption = state.directorCaption ?? entryCaption;
 
   return {
     sessionId: state.sessionId,
@@ -272,8 +273,11 @@ export class DirectorRuntime {
       }
 
       case "SET_CAPTION":
-        // Caption lives in render state derived from beat; nothing to mutate here for scripted captions.
-        // Custom override would need a state field. No-op for now.
+        this.state = {
+          ...this.state,
+          directorCaption: cmd.text,
+        };
+        this.emitStateUpdate();
         break;
 
       case "TRIGGER_FALLBACK": {
@@ -299,6 +303,10 @@ export class DirectorRuntime {
 
     const evt = makeGameEvent("system", "BEAT_ENTERED", { beatId });
     this.applyEvent(evt);
+    this.state = {
+      ...this.state,
+      directorCaption: undefined,
+    };
 
     // Update partner line for the new beat.
     const line = lineFor(beatId, this.state.partner, this.state.ledger);
@@ -452,4 +460,3 @@ export class DirectorRuntime {
 
 // Re-export for convenience.
 export { projectRenderState };
-
