@@ -29,7 +29,7 @@ import { callPartnerAgent, isPartnerLiveTextEnabled, isPartnerLiveBeat } from ".
 import { RealtimePartner } from "./components/RealtimePartner";
 import type { PartnerToolCall } from "./realtime/types";
 
-type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict";
+type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict" | "debrief_card";
 
 // Beats where the muppet (3D Three.js officer rig) is mounted on stage.
 // Officer beats = officer is delivering a line.
@@ -41,6 +41,9 @@ const MUPPET_STAGE_BEATS: ReadonlySet<string> = new Set([
   "verdict",
   "verification_games",
   "generation_progress",
+  // Officer reads the verdict alongside the debrief card so the player gets
+  // the human-shaped sign-off, not just a static page.
+  "debrief_card",
 ]);
 
 type ChallengeOutcome = "waiting" | "pass" | "fail" | "skip";
@@ -134,6 +137,22 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
         : "Reviewable. Not yet alarming. Provisional approval, with notes.",
       expression: "warm",
       gesture: "nod",
+    };
+  }
+  if (beatId === "debrief_card") {
+    const { ledger } = state;
+    const verdict =
+      ledger.playerShirks >= 3 ? "your honesty needs work"
+      : ledger.playerNightShifts >= 2 && ledger.playerSoothes >= 4 ? "you held the line"
+      : "you held it together";
+    return {
+      text: profile === "Crumb"
+        ? `Right. The file's stamped — ${verdict}, lah. Take the card. Next rehearsal when you're ready.`
+        : profile === "Bern"
+        ? `File closed. ${verdict[0].toUpperCase() + verdict.slice(1)}. The card is yours to keep.`
+        : `That concludes the rehearsal. ${verdict[0].toUpperCase() + verdict.slice(1)}. Take the card with you.`,
+      expression: "warm",
+      gesture: "stamp",
     };
   }
   return { text: "", expression: "strict", gesture: "none" };
@@ -663,6 +682,27 @@ export function Game() {
   }, [render?.beatId, render?.partner.visible, state]);
 
 
+  // ── Baby cry-channel CUE tracks visualState ──────────────────────────────
+  // Picks a looping cry sample per visualState so the audio is actually
+  // present (not just turned up via intensity). Stops on settled / sleep.
+  // Combined with the intensity effect below, the baby breathes on/off in
+  // lockstep with the photo-state crossfade.
+  useEffect(() => {
+    if (!render) return;
+    const CUE: Partial<Record<import("@contracts/game-state").BabyVisualState, string>> = {
+      drowsy: "babyAudio.tired",
+      hungry: "babyAudio.hunger",
+      fussy:  "babyAudio.discomfort",
+      crying: "babyAudio.hunger",
+    };
+    const cue = CUE[render.baby.visualState];
+    if (cue) {
+      audioRef.current?.handle({ type: "play_audio", channel: "baby", assetId: cue, loop: true });
+    } else {
+      audioRef.current?.handle({ type: "stop_audio", channel: "baby" });
+    }
+  }, [render?.baby.visualState]);
+
   // ── Baby cry-channel intensity tracks visualState ─────────────────────────
   // Modulates the baby audio channel's volume with the rig: settled silent,
   // crying near full, sleep silent. AudioDirector fades over ~240ms so this
@@ -835,6 +875,10 @@ export function Game() {
   }
 
   const isOfficerBeat = OFFICER_BEATS.has(render.beatId as OfficerBeat);
+  // ── Show muppet on the debrief screen so the officer literally signs off ──
+  // (the OFFICER_BEATS set already includes "debrief_card" so the dialog
+  // effect speaks the verdict line; here we just ensure the stage stays up
+  // alongside the card for that beat.)
   const isHome = render.beatId === "home";
   const isDebrief = render.beatId === "debrief_card";
   const isReveal = render.beatId === "baby_roll";

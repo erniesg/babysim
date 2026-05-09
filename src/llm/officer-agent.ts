@@ -12,7 +12,7 @@ export type OfficerLine = {
   gesture: MuppetGesture;
 };
 
-type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict";
+type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict" | "debrief_card";
 
 const ENDPOINT = "/api/officer";
 

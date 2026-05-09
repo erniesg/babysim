@@ -27,8 +27,56 @@ export function SingMicCapture({ onCancel, onComplete }: Props) {
   const rafRef = useRef<number>(0);
   const samplesRef = useRef<number[]>([]);
   const startedAtRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => stopAll(), []);
+
+  // Decode an uploaded audio file (wav/mp3/m4a/ogg/whatever the browser
+  // supports) and run the same volume / rhythm analysis we apply to the
+  // mic sample window, then emit the same Features shape so downstream
+  // soothing logic doesn't care about the entry path.
+  async function analyseFile(file: File) {
+    setPhase("analyzing");
+    setError(null);
+    try {
+      const ab = await file.arrayBuffer();
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      ctxRef.current = ctx;
+      const buf = await ctx.decodeAudioData(ab.slice(0));
+      // Take channel 0; downsample to ~50 Hz frames so the variance proxy
+      // resembles what the mic-frame loop produces (one sample per rAF).
+      const data = buf.getChannelData(0);
+      const FRAME_HZ = 50;
+      const frameSize = Math.max(1, Math.floor(buf.sampleRate / FRAME_HZ));
+      const samples: number[] = [];
+      for (let i = 0; i + frameSize <= data.length; i += frameSize) {
+        let sum = 0;
+        for (let j = 0; j < frameSize; j++) sum += Math.abs(data[i + j]);
+        samples.push(Math.min(1, (sum / frameSize) * 2));
+      }
+      if (samples.length < 4) throw new Error("clip too short to read");
+      const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+      let variance = 0;
+      for (const s of samples) variance += (s - mean) ** 2;
+      variance /= samples.length;
+      const rhythm = Math.min(1, Math.sqrt(variance) * 2.5);
+      const duration = (samples.length / FRAME_HZ) * 1000;
+      ctx.close().catch(() => {});
+      setPhase("done");
+      onComplete({ volume: mean, rhythm, duration, pitch: undefined });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't decode that file.");
+      setPhase("prep");
+    }
+  }
+
+  function onFileChange(ev: React.ChangeEvent<HTMLInputElement>) {
+    const f = ev.target.files?.[0];
+    ev.target.value = "";
+    if (!f) return;
+    void analyseFile(f);
+  }
 
   function stopAll() {
     cancelAnimationFrame(rafRef.current);
@@ -132,15 +180,27 @@ export function SingMicCapture({ onCancel, onComplete }: Props) {
         </div>
         <div className="sing-actions">
           {phase === "prep" && (
-            <button className="primary" onClick={start}>
-              Start singing
-            </button>
+            <>
+              <button className="primary" onClick={start}>
+                Sing into mic
+              </button>
+              <button onClick={() => fileInputRef.current?.click()}>
+                Upload a clip
+              </button>
+            </>
           )}
           {phase === "recording" && (
             <button onClick={finalize}>Stop early</button>
           )}
           <button onClick={() => { stopAll(); onCancel(); }}>Cancel</button>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          hidden
+          onChange={onFileChange}
+        />
         <p className="dim sing-hint">The Ministry analyzes volume and rhythm. It does not transcribe.</p>
       </div>
     </div>
