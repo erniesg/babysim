@@ -45,10 +45,25 @@ export async function geminiTokenHandler(request: Request, env: GeminiTokenEnv):
   try {
     const url = `https://generativelanguage.googleapis.com/v1alpha/auth/tokens?key=${encodeURIComponent(apiKey)}`;
     log("calling auth/tokens", url.replace(apiKey, "<redacted>"));
+    // Gemini Live ephemeral tokens REQUIRE liveConnectConstraints to bind the
+    // token to a model + config at mint time. Without it the token can't open
+    // a live session and the wss server closes the socket pre-setup with
+    // code 1000 (which is what we were seeing).
+    const tokenBody = {
+      expireTime,
+      uses: 1,
+      newSessionExpireTime,
+      liveConnectConstraints: {
+        model: `models/${liveModel}`,
+        config: {
+          responseModalities: ["AUDIO"],
+        },
+      },
+    };
     const upstream = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ expireTime, uses: 1, newSessionExpireTime }),
+      body: JSON.stringify(tokenBody),
     });
     const text = await upstream.text();
     log("auth/tokens response", { status: upstream.status, ok: upstream.ok, bodyHead: text.slice(0, 400) });

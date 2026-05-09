@@ -1,67 +1,204 @@
-import type { CreatePartnerSession, PartnerEvent, PartnerSessionConfig, RealtimePartnerSession } from "./types";
+import type {
+  CreatePartnerSession,
+  PartnerEvent,
+  PartnerSessionConfig,
+  PartnerToolCall,
+  RealtimePartnerSession,
+} from "./types";
 
 const TOKEN_ENDPOINT = "/api/realtime/openai/token";
+
+const log = (...args: unknown[]) => console.log("[OpenAIRealtime]", ...args);
 
 type EphemeralKeyResponse = {
   client_secret: { value: string; expires_at: number };
   model: string;
 };
 
-// OpenAI Realtime — WebRTC peer connection in browser, ephemeral key minted server-side.
-// Skeleton: enough to compile + match the Gemini interface; full WebRTC negotiation
-// can be filled in once the ephemeral-key endpoint is verified end-to-end.
-export const createOpenAIRealtimePartner: CreatePartnerSession = (config: PartnerSessionConfig): RealtimePartnerSession => {
+// Function definitions matching the Gemini Live tool surface 1:1 so the
+// reducer dispatch (Game.tsx) handles either provider transparently.
+const PARTNER_TOOLS = [
+  {
+    type: "function" as const,
+    name: "take_night_shift",
+    description: "Partner agrees to take this 2 AM shift. Updates ledger.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    type: "function" as const,
+    name: "refuse_night_shift",
+    description: "Partner refuses this shift. Player will need to handle the cry.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    type: "function" as const,
+    name: "concede_argument",
+    description: "Partner concedes — argument resolves, partner takes the shift.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    type: "function" as const,
+    name: "raise_resentment",
+    description: "Partner stays angry; resentment increments.",
+    parameters: {
+      type: "object",
+      properties: { delta: { type: "number", description: "Resentment delta 1-25." } },
+      required: [],
+    },
+  },
+];
+
+function archetypeStyle(archetype: PartnerSessionConfig["archetype"]): string {
+  switch (archetype) {
+    case "anxious":
+      return "Tone: hushed, fretty, sentences trailing. Concerned not cruel. Slightly self-blaming.";
+    case "chill":
+      return "Tone: laconic, low-energy, half-amused. Short clauses. Says 'mm' and 'sure' a lot.";
+    case "resentful":
+      return "Tone: scorekeeping, clipped. Cites the ledger. Cold but not yelling.";
+    case "overfunctioner":
+      return "Tone: martyred, performatively competent, quietly exhausted. Lists tasks defensively.";
+  }
+}
+
+function systemPromptFor(cfg: PartnerSessionConfig): string {
+  const ledgerLine =
+    `Ledger snapshot — you (the partner): ${cfg.ledger.partnerNightShifts} night shifts, ` +
+    `${cfg.ledger.partnerSoothes} soothes, ${cfg.ledger.partnerShirks} shirks. ` +
+    `The player: ${cfg.ledger.playerNightShifts}/${cfg.ledger.playerSoothes}/${cfg.ledger.playerShirks}.`;
+  return [
+    `You are ${cfg.partnerName}, the player's co-parent in a stylized 1970s East Asian state-drama parenting rehearsal.`,
+    `Archetype: ${cfg.archetype}. ${archetypeStyle(cfg.archetype)}`,
+    `Baby: ${cfg.babyName}. Current beat: ${cfg.beatId}.`,
+    ledgerLine,
+    `It is 2:07 AM and the baby is crying. You are tired. The player just made a choice — getting up themselves, shirking, or waking you. React in character with one short turn.`,
+    `When you make a decision (take the shift, refuse, concede, or escalate resentment), call the appropriate function tool. You can also speak briefly. Do not narrate the simulation. Do not break character. Audio responses preferred over text.`,
+  ].join(" ");
+}
+
+// Voice mapping — OpenAI Realtime supports voices like "verse" / "alloy" /
+// "ash" / "ballad" / "coral" / "echo" / "sage" / "shimmer". Pick distinct
+// voices per archetype so the partner sounds different per playthrough.
+function voiceForArchetype(archetype: PartnerSessionConfig["archetype"]): string {
+  switch (archetype) {
+    case "anxious":        return "shimmer";  // softer, breathy
+    case "chill":          return "ash";      // dry, laid-back
+    case "resentful":      return "ballad";   // cooler register
+    case "overfunctioner": return "verse";    // brisk, capable
+  }
+}
+
+export const createOpenAIRealtimePartner: CreatePartnerSession = (
+  config: PartnerSessionConfig,
+): RealtimePartnerSession => {
   const handlers = new Set<(e: PartnerEvent) => void>();
   let pc: RTCPeerConnection | null = null;
   let dc: RTCDataChannel | null = null;
   let micStream: MediaStream | null = null;
   let opened = false;
+  let textBuffer = "";
 
   function emit(e: PartnerEvent) {
     for (const h of handlers) h(e);
   }
 
   async function fetchKey(): Promise<EphemeralKeyResponse> {
+    log("fetching ephemeral key");
     const res = await fetch(TOKEN_ENDPOINT, { method: "POST" });
-    if (!res.ok) throw new Error(`ephemeral key fetch failed: ${res.status}`);
-    return (await res.json()) as EphemeralKeyResponse;
+    const bodyText = await res.text();
+    if (!res.ok) {
+      throw new Error(`ephemeral key fetch failed (${res.status}): ${bodyText.slice(0, 240)}`);
+    }
+    return JSON.parse(bodyText) as EphemeralKeyResponse;
+  }
+
+  // Push the system prompt + tools + voice into the session AFTER the data
+  // channel opens. Until this fires, OpenAI uses generic defaults — no
+  // archetype, no tool calls.
+  function configureSession() {
+    if (!dc || dc.readyState !== "open") return;
+    const updateEvent = {
+      type: "session.update",
+      session: {
+        modalities: ["audio", "text"],
+        voice: voiceForArchetype(config.archetype),
+        instructions: systemPromptFor(config),
+        tools: PARTNER_TOOLS,
+        tool_choice: "auto",
+        turn_detection: {
+          type: "server_vad",
+          threshold: 0.5,
+          prefix_padding_ms: 200,
+          silence_duration_ms: 600,
+        },
+        input_audio_format: "pcm16",
+        output_audio_format: "pcm16",
+      },
+    };
+    log("session.update", { voice: voiceForArchetype(config.archetype), beat: config.beatId });
+    dc.send(JSON.stringify(updateEvent));
+
+    // Trigger the first response so the partner speaks first when the live
+    // turn opens — matches the Gemini path.
+    dc.send(JSON.stringify({ type: "response.create" }));
   }
 
   async function start(): Promise<void> {
     const key = await fetchKey();
+    log("opening WebRTC peer connection", { model: key.model });
     pc = new RTCPeerConnection();
 
+    // Inbound audio track → speaker. OpenAI Realtime streams the partner's
+    // voice as a normal audio track over WebRTC; we wire it to a hidden
+    // <audio> element so the user hears it.
     pc.ontrack = (ev) => {
       const [stream] = ev.streams;
       if (!stream) return;
-      // Wrap inbound audio track into a single AudioContext sink at the call site.
-      // Emit a single open-time event with the stream attached on first track.
-      // For brevity we re-emit each chunk via a worklet — left as a follow-up.
-      emit({ type: "text_delta", text: `[track ${stream.id}]` });
+      const audio = new Audio();
+      audio.srcObject = stream;
+      audio.autoplay = true;
+      void audio.play().catch(() => { /* autoplay may need user gesture */ });
+      log("inbound audio track", { id: stream.id });
     };
 
     dc = pc.createDataChannel("oai-events");
+    dc.onopen = () => {
+      log("data channel open");
+      configureSession();
+      if (!opened) {
+        opened = true;
+        emit({ type: "open" });
+      }
+    };
     dc.onmessage = (ev) => {
       try {
         const evt = JSON.parse(ev.data) as { type: string; [k: string]: unknown };
-        if (evt.type === "session.created" && !opened) {
+        const t = evt.type;
+
+        if (t === "session.created" && !opened) {
           opened = true;
           emit({ type: "open" });
-        } else if (evt.type === "response.text.delta") {
-          emit({ type: "text_delta", text: String(evt.delta ?? "") });
-        } else if (evt.type === "response.text.done") {
-          emit({ type: "text_complete", text: String(evt.text ?? "") });
-        } else if (evt.type === "response.function_call_arguments.done") {
-          // OpenAI Realtime tool-call event shape per the research doc.
+        } else if (t === "response.audio_transcript.delta" || t === "response.text.delta") {
+          const d = String(evt.delta ?? "");
+          textBuffer += d;
+          if (d) emit({ type: "text_delta", text: d });
+        } else if (t === "response.audio_transcript.done" || t === "response.text.done") {
+          const text = String(evt.transcript ?? evt.text ?? textBuffer);
+          if (text) emit({ type: "text_complete", text });
+          textBuffer = "";
+        } else if (t === "response.function_call_arguments.done") {
           const name = String(evt.name ?? "");
           let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(String(evt.arguments ?? "{}")) as Record<string, unknown>;
-          } catch {}
-          emit({ type: "tool_call", call: { name, args } });
+          try { args = JSON.parse(String(evt.arguments ?? "{}")) as Record<string, unknown>; } catch { /* noop */ }
+          log("tool call", { name, args });
+          emit({ type: "tool_call", call: { name, args } as PartnerToolCall });
+        } else if (t === "error") {
+          const msg = (evt.error as { message?: string } | undefined)?.message ?? "openai realtime error";
+          log("server error", evt);
+          emit({ type: "error", error: msg });
         }
       } catch {
-        // ignore non-JSON
+        /* ignore non-JSON */
       }
     };
 
@@ -71,6 +208,7 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (config: Partne
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
+    log("posting SDP offer to OpenAI");
     const sdpRes = await fetch(`https://api.openai.com/v1/realtime?model=${encodeURIComponent(key.model)}`, {
       method: "POST",
       headers: {
@@ -79,29 +217,32 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (config: Partne
       },
       body: offer.sdp,
     });
-    if (!sdpRes.ok) throw new Error(`SDP exchange failed: ${sdpRes.status}`);
+    if (!sdpRes.ok) {
+      const detail = await sdpRes.text();
+      throw new Error(`SDP exchange failed (${sdpRes.status}): ${detail.slice(0, 240)}`);
+    }
     const answerSdp = await sdpRes.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-
-    if (!opened) {
-      emit({ type: "open" });
-      opened = true;
-    }
+    log("WebRTC connected");
   }
 
   function sendMicChunk(_chunk: ArrayBuffer): void {
-    // OpenAI Realtime WebRTC: mic flows over the peer-connection track, no manual
-    // chunking. Gemini Live takes manual chunks. The interface accepts both.
+    // OpenAI WebRTC: mic flows over the peer-connection track, no manual
+    // chunking needed. Gemini Live takes manual chunks. Interface accepts both.
   }
 
   function sendText(text: string): void {
     if (!dc || dc.readyState !== "open") return;
-    dc.send(
-      JSON.stringify({
-        type: "response.create",
-        response: { modalities: ["audio", "text"], instructions: text },
-      }),
-    );
+    // Two-step: append the user message, then ask for a response.
+    dc.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      },
+    }));
+    dc.send(JSON.stringify({ type: "response.create" }));
   }
 
   function on(handler: (event: PartnerEvent) => void): () => void {
@@ -112,17 +253,12 @@ export const createOpenAIRealtimePartner: CreatePartnerSession = (config: Partne
   function close(): void {
     micStream?.getTracks().forEach((t) => t.stop());
     micStream = null;
-    dc?.close();
+    try { dc?.close(); } catch { /* noop */ }
     dc = null;
-    pc?.close();
+    try { pc?.close(); } catch { /* noop */ }
     pc = null;
     handlers.clear();
   }
 
   return { start, sendMicChunk, sendText, on, close, provider: "openai" };
 };
-
-// Reference the config so TS doesn't complain about unused param when the body
-// is filled in later. The OpenAI flow uses session.update with the partner's
-// system prompt and tool definitions over the data channel after start().
-void ((cfg: PartnerSessionConfig) => cfg);

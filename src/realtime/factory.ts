@@ -2,9 +2,9 @@ import type { CreatePartnerSession, RealtimeProvider } from "./types";
 import { createGeminiLivePartner } from "./gemini-live";
 import { createOpenAIRealtimePartner } from "./openai-realtime";
 
-export function createRealtimePartner(provider: RealtimeProvider = "gemini"): CreatePartnerSession {
-  if (provider === "openai") return createOpenAIRealtimePartner;
-  return createGeminiLivePartner;
+export function createRealtimePartner(provider: RealtimeProvider = "openai"): CreatePartnerSession {
+  if (provider === "gemini") return createGeminiLivePartner;
+  return createOpenAIRealtimePartner;
 }
 
 export function selectedProviderFromEnv(): RealtimeProvider {
@@ -20,8 +20,12 @@ export function selectedProviderFromEnv(): RealtimeProvider {
     } catch { /* SSR or sandboxed — fall through */ }
   }
   const flag = import.meta.env.VITE_REALTIME_PARTNER_PROVIDER;
-  if (flag === "openai") return "openai";
-  return "gemini";
+  if (flag === "gemini") return "gemini";
+  // Default: OpenAI Realtime (WebRTC + ephemeral key — known-reliable). The
+  // Gemini Live path needs a working v1alpha auth/tokens response with
+  // liveConnectConstraints; until that's verified end-to-end in this
+  // environment, OpenAI is the demo-stable provider.
+  return "openai";
 }
 
 export function setRealtimeProviderOverride(provider: RealtimeProvider | null): void {
