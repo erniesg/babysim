@@ -1,0 +1,24 @@
+{
+  "id": "baby-photoreal-v1",
+  "layout": "full-frame-photo-states",
+  "canvas": {
+    "width": 1440,
+    "height": 1000
+  },
+  "layers": [
+    { "name": "settled", "file": "states/settled.png", "group": "state", "layout": "fullFrame" },
+    { "name": "drowsy",  "file": "states/drowsy.png",  "group": "state", "layout": "fullFrame" },
+    { "name": "hungry",  "file": "states/hungry.png",  "group": "state", "layout": "fullFrame" },
+    { "name": "fussy",   "file": "states/fussy.png",   "group": "state", "layout": "fullFrame" },
+    { "name": "crying",  "file": "states/crying.png",  "group": "state", "layout": "fullFrame" },
+    { "name": "sleep",   "file": "states/sleep.png",   "group": "state", "layout": "fullFrame" }
+  ],
+  "expressions": {
+    "settled": { "layers": ["settled"], "tears": false },
+    "drowsy":  { "layers": ["drowsy"],  "tears": false },
+    "hungry":  { "layers": ["hungry"],  "tears": false },
+    "fussy":   { "layers": ["fussy"],   "tears": false },
+    "crying":  { "layers": ["crying"],  "tears": true  },
+    "sleep":   { "layers": ["sleep"],   "tears": false }
+  }
+}

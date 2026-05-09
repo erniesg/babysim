@@ -18,7 +18,7 @@ import { VerificationGames } from "./components/VerificationGames";
 import { LogoStrip } from "./components/LogoStrip";
 import { TimeProgressBar } from "./components/TimeProgressBar";
 import { OfficerWarning } from "./components/OfficerWarning";
-import { AdoptOrGenerate, type BabyKind } from "./components/AdoptOrGenerate";
+import { AdoptOrGenerate, type BabyKind, type AdoptedRig } from "./components/AdoptOrGenerate";
 import { DebugOverlay } from "./components/DebugOverlay";
 import { AudioDirector } from "./audio/AudioDirector";
 import type { MuppetCharacter, MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
@@ -174,6 +174,9 @@ export function Game() {
   // (after line 2, before scene_ack). adopt → use canonical /puppets/baby/
   // rig; generate → kick off /api/baby/portrait. Survives through baby_roll.
   const [babyKind, setBabyKind] = useState<BabyKind | null>(null);
+  // Rig chosen at the in-stage adopt chooser. Defaults to canonical rig when
+  // the player picks Generate (a fresh portrait overlays the rig downstream).
+  const [adoptedRig, setAdoptedRig] = useState<AdoptedRig | null>(null);
   // Toggle for the in-stage chooser overlay. Set true when officer_intro line 2
   // finishes; cleared the moment the player picks (officer then voices a
   // transition line and we send scene_ack to advance to verification).
@@ -667,9 +670,10 @@ export function Game() {
   // Voices a transition line in the officer's character, kicks off the live
   // portrait fetch if generate, then sends scene_ack to advance to verification.
   const onChooseIntake = useCallback(
-    async (kind: BabyKind) => {
+    async (kind: BabyKind, rig?: AdoptedRig) => {
       audioRef.current?.unlock();
       setBabyKind(kind);
+      if (rig) setAdoptedRig(rig);
       setIntakeChoiceOpen(false);
       if (!state) return;
 
@@ -917,6 +921,8 @@ export function Game() {
                   visualState={render.baby.visualState}
                   name={render.baby.name}
                   mood={render.baby.mood}
+                  rigManifestUrl={adoptedRig?.manifest}
+                  rigBaseDir={adoptedRig?.baseDir}
                 />
                 {babyHint && (
                   <p className="baby-hint" aria-live="polite">{babyHint}</p>

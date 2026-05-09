@@ -14,32 +14,44 @@ import "./AdoptOrGenerate.css";
 
 export type BabyKind = "adopt" | "generate";
 
+export type AdoptedRig = { manifest: string; baseDir: string };
+
 type Props = {
   officerName: string;
   partnerName: string;
-  onChoose: (kind: BabyKind) => void;
+  onChoose: (kind: BabyKind, rig?: AdoptedRig) => void;
 };
 
-// Pool of pre-generated rigs — each is a directory under /puppets/ with its
-// own face_backplate + 6 expression layer sets. Today only the canonical
-// rig exists; adding more is just dropping a sibling dir.
-const ADOPT_RIG_POOL: Array<{ id: string; faceBackplate: string; manifest: string; baseDir: string }> = [
+// Pool of pre-generated rigs — each is a directory under /puppets/ with a
+// puppet.json manifest. Two layouts coexist:
+//   - "full-frame-state-layers": canonical 14-layer landmark-aligned rig
+//   - "full-frame-photo-states":  one full-frame photo per BabyVisualState
+const ADOPT_RIG_POOL: Array<{ id: string; preview: string; manifest: string; baseDir: string }> = [
   {
     id: "ward-001",
-    faceBackplate: "/puppets/baby/layers/face_backplate.png",
+    preview: "/puppets/baby/layers/face_backplate.png",
     manifest: "/puppets/baby/puppet.json",
     baseDir: "/puppets/baby",
+  },
+  {
+    id: "ward-photoreal-v1",
+    preview: "/puppets/baby-photoreal-v1/states/settled.png",
+    manifest: "/puppets/baby-photoreal-v1/puppet.json",
+    baseDir: "/puppets/baby-photoreal-v1",
   },
 ];
 
 export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoose }: Props) {
   // Pick a random rig preview so each game feels fresh once the pool grows.
-  const [adoptPreview, setAdoptPreview] = useState<string>(ADOPT_RIG_POOL[0].faceBackplate);
+  // We hold the full pick (not just the preview URL) so the choice can be
+  // forwarded through onChoose into the game state.
+  const [pick, setPick] = useState(ADOPT_RIG_POOL[0]);
 
   useEffect(() => {
-    const pick = ADOPT_RIG_POOL[Math.floor(Math.random() * ADOPT_RIG_POOL.length)];
-    setAdoptPreview(pick.faceBackplate);
+    setPick(ADOPT_RIG_POOL[Math.floor(Math.random() * ADOPT_RIG_POOL.length)]);
   }, []);
+
+  const adoptPreview = pick.preview;
 
   return (
     <div className="adopt-generate">
@@ -53,7 +65,7 @@ export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoo
       </div>
 
       <div className="adopt-generate-cards">
-        <button className="adopt-card" onClick={() => onChoose("adopt")}>
+        <button className="adopt-card" onClick={() => onChoose("adopt", { manifest: pick.manifest, baseDir: pick.baseDir })}>
           <div className="adopt-card-art">
             <img src={adoptPreview} alt="" draggable={false} />
             <span className="adopt-card-tag">Adopt</span>
