@@ -683,24 +683,22 @@ export function Game() {
 
 
   // ── Baby cry-channel CUE tracks visualState ──────────────────────────────
-  // Picks a looping cry sample per visualState so the audio is actually
-  // present (not just turned up via intensity). Stops on settled / sleep.
-  // Combined with the intensity effect below, the baby breathes on/off in
-  // lockstep with the photo-state crossfade.
+  // Every state has a sound — settled and sleep get a quiet contented coo
+  // so the baby is never silent. Distress crescendoes through the cycle:
+  // hungry/fussy use the rising-strain samples, crying picks discomfort
+  // (the most distressed plate) at near-full intensity.
   useEffect(() => {
     if (!render) return;
-    const CUE: Partial<Record<import("@contracts/game-state").BabyVisualState, string>> = {
-      drowsy: "babyAudio.tired",
-      hungry: "babyAudio.hunger",
-      fussy:  "babyAudio.discomfort",
-      crying: "babyAudio.hunger",
+    const CUE: Record<import("@contracts/game-state").BabyVisualState, string> = {
+      settled: "babyAudio.coo",         // contented gurgle
+      drowsy:  "babyAudio.tired",       // sleepy whimper
+      hungry:  "babyAudio.hunger",      // rhythmic hunger fuss
+      fussy:   "babyAudio.discomfort",  // strained, building
+      crying:  "babyAudio.discomfort",  // peak distress
+      sleep:   "babyAudio.coo",         // gentle breathing/sigh
     };
     const cue = CUE[render.baby.visualState];
-    if (cue) {
-      audioRef.current?.handle({ type: "play_audio", channel: "baby", assetId: cue, loop: true });
-    } else {
-      audioRef.current?.handle({ type: "stop_audio", channel: "baby" });
-    }
+    audioRef.current?.handle({ type: "play_audio", channel: "baby", assetId: cue, loop: true });
   }, [render?.baby.visualState]);
 
   // ── Baby cry-channel intensity tracks visualState ─────────────────────────
@@ -709,13 +707,17 @@ export function Game() {
   // breathes in lockstep with the photo-state crossfade.
   useEffect(() => {
     if (!render) return;
+    // Crescendoing distress — settled & sleep are audibly present but quiet
+    // (contented gurgle / soft breathing); drowsy/hungry/fussy build up;
+    // crying peaks. Combined with the cue effect above, every state has a
+    // sample AND a volume that telegraphs the baby's mood.
     const INTENSITY: Record<import("@contracts/game-state").BabyVisualState, number> = {
-      settled: 0.0,
-      drowsy:  0.10,
-      hungry:  0.40,
-      fussy:   0.55,
-      crying:  0.85,
-      sleep:   0.0,
+      settled: 0.18,   // quiet coo
+      drowsy:  0.30,
+      hungry:  0.55,
+      fussy:   0.75,
+      crying:  0.98,   // near-full
+      sleep:   0.10,   // soft sleep breathing
     };
     audioRef.current?.setIntensity("baby", INTENSITY[render.baby.visualState] ?? 0.5);
   }, [render?.baby.visualState]);

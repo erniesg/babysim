@@ -78,13 +78,28 @@ export class AudioDirector {
 
   // Set the channel's intensity multiplier and fade any active element on
   // that channel toward its new effective target volume over ~240 ms.
-  // Called from Game.tsx when render.baby.visualState changes.
+  // Also pauses/resumes the underlying element on hard 0/non-zero flips so
+  // that muting is durable (a paused element survives tab-backgrounding /
+  // audio-context suspends) and unmuting reliably restarts playback.
   setIntensity(channel: Channel, level: number): void {
     const clamped = Math.max(0, Math.min(1, level));
+    const prev = this.intensities[channel] ?? 1;
     this.intensities[channel] = clamped;
     const el = this.elements[channel];
-    if (el) {
-      const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+    if (!el) return;
+    const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+    if (clamped <= 0.001) {
+      // Hard mute — fade out then pause so the element is durably stopped.
+      this.fadeTo(el, 0, 240, () => {
+        try { el.pause(); } catch { /* noop */ }
+      });
+    } else if (prev <= 0.001 && clamped > 0.001) {
+      // Hard unmute — resume from paused, fade up to target.
+      el.volume = 0;
+      el.play().catch(() => { /* autoplay blocked — silent fail */ });
+      this.fadeTo(el, baseline * clamped, 240);
+    } else {
+      // Smooth modulate (e.g. visualState shift) — just retarget.
       this.fadeTo(el, baseline * clamped, 240);
     }
   }
@@ -132,13 +147,20 @@ export class AudioDirector {
     const el = new Audio(url);
     el.loop = loop;
     el.volume = 0;
-    el.play().catch(() => {
-      // Autoplay rejected or file missing — silent fail keeps the demo running.
-    });
+    // Only start playback if the channel isn't muted right now. The element
+    // is still mounted into this.elements[channel] so a later setIntensity
+    // unmute can resume from paused.
+    if (intensity > 0.001) {
+      el.play().catch(() => {
+        // Autoplay rejected or file missing — silent fail keeps the demo running.
+      });
+    }
     this.elements[channel] = el;
     this.playing[channel] = { assetId, loop };
-    // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
-    this.fadeTo(el, targetVol, 300);
+    if (intensity > 0.001) {
+      // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
+      this.fadeTo(el, targetVol, 300);
+    }
   }
 
   // Resolve the URL to use for a given assetId.

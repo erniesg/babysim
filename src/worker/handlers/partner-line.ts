@@ -32,6 +32,10 @@ type RequestBody = {
   // Optional player-typed message — when present, the partner is responding
   // to it directly (chat-style) rather than just emitting a beat reaction.
   userMessage?: string;
+  // Optional rolling transcript of the conversation so the partner has
+  // continuity across turns — without this every reply is stateless and
+  // tends toward canned archetype responses.
+  chatHistory?: string;
 };
 
 type SayLineArgs = {
@@ -137,9 +141,16 @@ function buildUserMessage(body: RequestBody): string {
     parts.push(`Recent events: ${summaries.join(", ")}`);
   }
 
+  if (body.chatHistory && body.chatHistory.trim().length > 0) {
+    parts.push(`Conversation so far:\n${body.chatHistory.trim().slice(0, 2400)}`);
+  }
   if (body.userMessage && body.userMessage.trim().length > 0) {
     parts.push(`The player just said to you: "${body.userMessage.trim().slice(0, 600)}"`);
-    parts.push("Call say_line() with the partner's direct reply to that line. Stay in archetype.");
+    parts.push(
+      "Call say_line() with the partner's NEXT reply, advancing the conversation. " +
+      "Do NOT repeat earlier lines verbatim. If the player has been pleading or reasoning, " +
+      "let your stance shift incrementally — concede, push back harder, change tactics. Stay in archetype.",
+    );
   } else {
     parts.push("Call say_line() once with the partner's reaction to this beat.");
   }

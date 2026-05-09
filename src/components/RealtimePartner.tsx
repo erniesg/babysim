@@ -168,6 +168,13 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
       } catch { /* fall through to text endpoint */ }
     }
 
+    // Build a transcript of the conversation so the partner has continuity
+    // across turns. Without this each /api/partner/line call is stateless and
+    // the replies feel canned because Gemini sees no prior context.
+    const chatHistory = [...chatLog, { who: "you" as const, text }]
+      .map((m) => `${m.who === "you" ? "Player" : state.partner.name}: ${m.text}`)
+      .join("\n");
+
     try {
       const res = await fetch("/api/partner/line", {
         method: "POST",
@@ -188,6 +195,7 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
           },
           recentEvents: state.eventLog.slice(-5),
           userMessage: text,
+          chatHistory,
         }),
       });
       if (res.ok) {
