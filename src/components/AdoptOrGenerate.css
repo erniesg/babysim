@@ -61,6 +61,48 @@
   }
 }
 
+/* Simple text-forward chooser — two big buttons, no preview imagery. */
+.adopt-card-simple {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 20px;
+  min-height: 144px;
+  background: rgba(245, 220, 140, 0.06);
+  border: 1px solid rgba(245, 220, 140, 0.28);
+  border-radius: 14px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.08s ease;
+  text-align: center;
+}
+
+.adopt-card-simple:hover {
+  background: rgba(245, 220, 140, 0.12);
+  border-color: rgba(245, 220, 140, 0.48);
+}
+
+.adopt-card-simple:active {
+  transform: translateY(1px);
+}
+
+.adopt-card-simple h3 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: rgba(245, 220, 140, 0.96);
+}
+
+.adopt-card-simple .adopt-card-meta {
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
 .adopt-card {
   position: relative;
   display: flex;

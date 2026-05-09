@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import "./AdoptOrGenerate.css";
 
 /**
@@ -25,26 +24,18 @@ type Props = {
 // Pool of pre-generated rigs — each is a directory under /puppets/ with a
 // puppet.json manifest. Single rig today: full-frame photo-state cycle
 // (settled / drowsy / hungry / fussy / crying / sleep).
-const ADOPT_RIG_POOL: Array<{ id: string; preview: string; manifest: string; baseDir: string }> = [
+const ADOPT_RIG_POOL: Array<{ id: string; manifest: string; baseDir: string }> = [
   {
     id: "ward-photoreal-v1",
-    preview: "/puppets/baby-photoreal-v1/states/settled.png",
     manifest: "/puppets/baby-photoreal-v1/puppet.json",
     baseDir: "/puppets/baby-photoreal-v1",
   },
 ];
 
 export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoose }: Props) {
-  // Pick a random rig preview so each game feels fresh once the pool grows.
-  // We hold the full pick (not just the preview URL) so the choice can be
-  // forwarded through onChoose into the game state.
-  const [pick, setPick] = useState(ADOPT_RIG_POOL[0]);
-
-  useEffect(() => {
-    setPick(ADOPT_RIG_POOL[Math.floor(Math.random() * ADOPT_RIG_POOL.length)]);
-  }, []);
-
-  const adoptPreview = pick.preview;
+  // Single rig today — adopt resolves to it directly. (Pool kept as a list so
+  // adding more rigs is a one-line append.)
+  const pick = ADOPT_RIG_POOL[0];
 
   return (
     <div className="adopt-generate">
@@ -58,28 +49,20 @@ export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoo
       </div>
 
       <div className="adopt-generate-cards">
-        <button className="adopt-card" onClick={() => onChoose("adopt", { manifest: pick.manifest, baseDir: pick.baseDir })}>
-          <div className="adopt-card-art">
-            <img src={adoptPreview} alt="" draggable={false} />
-            <span className="adopt-card-tag">Adopt</span>
-          </div>
-          <div className="adopt-card-body">
-            <h3>Adopt from the pool</h3>
-            <p>A pre-generated ward, fully ready. Faster start, less personalized.</p>
-            <span className="adopt-card-meta">Instant · curated traits</span>
-          </div>
+        <button
+          className="adopt-card adopt-card-simple"
+          onClick={() => onChoose("adopt", { manifest: pick.manifest, baseDir: pick.baseDir })}
+        >
+          <h3>Adopt</h3>
+          <span className="adopt-card-meta">Instant · pre-generated ward</span>
         </button>
 
-        <button className="adopt-card" onClick={() => onChoose("generate")}>
-          <div className="adopt-card-art adopt-card-art-gen">
-            <span className="adopt-card-glyph" aria-hidden="true">✨</span>
-            <span className="adopt-card-tag">Generate</span>
-          </div>
-          <div className="adopt-card-body">
-            <h3>Generate from your file</h3>
-            <p>Live portrait composed from your intake photo. Takes a moment to render.</p>
-            <span className="adopt-card-meta">~ 60 s · personalized</span>
-          </div>
+        <button
+          className="adopt-card adopt-card-simple"
+          onClick={() => onChoose("generate")}
+        >
+          <h3>Generate</h3>
+          <span className="adopt-card-meta">~ 60 s · from your intake photo</span>
         </button>
       </div>
     </div>
