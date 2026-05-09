@@ -181,6 +181,15 @@ export function Game() {
   // finishes; cleared the moment the player picks (officer then voices a
   // transition line and we send scene_ack to advance to verification).
   const [intakeChoiceOpen, setIntakeChoiceOpen] = useState(false);
+  // BG music mute toggle — drives ambient channel intensity. Persists in
+  // localStorage so a refresh keeps the player's preference.
+  const [musicMuted, setMusicMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem("babysim:musicMuted") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    audioRef.current?.setIntensity("ambient", musicMuted ? 0 : 1);
+    try { localStorage.setItem("babysim:musicMuted", musicMuted ? "1" : "0"); } catch { /* noop */ }
+  }, [musicMuted]);
   // Game-clock anchor — captured at start_game so we can enforce a hard
   // 90 s deadline regardless of which beat we're in. At the deadline we
   // skip_to verdict so every play ends with a Ministry ruling.
@@ -859,6 +868,15 @@ export function Game() {
 
   return (
     <main className="app-shell">
+      <button
+        type="button"
+        className="music-toggle"
+        onClick={() => setMusicMuted((m) => !m)}
+        aria-label={musicMuted ? "Unmute music" : "Mute music"}
+        title={musicMuted ? "Unmute music" : "Mute music"}
+      >
+        {musicMuted ? "🔇" : "🔊"}
+      </button>
       <header className="app-bar">
         <span className="kicker">Ministry of Family and Human Development</span>
         {/* Logos now cycle on the muppet's chest badge (see muppet-engine.ts).

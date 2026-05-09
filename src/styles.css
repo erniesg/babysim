@@ -33,7 +33,39 @@ body,
   margin: 0 auto;
   padding: 24px;
   gap: 16px;
+  position: relative;
 }
+
+/* Music mute toggle — fixed top-right of the app shell so it's reachable on
+ * every beat. Clicking flips the ambient channel intensity 1 ↔ 0. */
+.music-toggle {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  background: rgba(20, 20, 26, 0.72);
+  border: 1px solid rgba(245, 220, 140, 0.32);
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.08s ease;
+}
+
+.music-toggle:hover {
+  background: rgba(40, 36, 30, 0.88);
+  border-color: rgba(245, 220, 140, 0.6);
+}
+
+.music-toggle:active { transform: translateY(1px); }
 
 .app-shell > .stage {
   flex: 1 1 auto;
