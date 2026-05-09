@@ -22,8 +22,15 @@ const BABY_SFX_TRIGGER: Record<string, string> = {
 };
 
 // Env flags — Vite exposes VITE_* vars through import.meta.env at build time.
+// Live baby SFX (ElevenLabs text_to_sound_v2) stays opt-in — the same-baby-pack
+// pre-baked recordings sound better and don't burn API budget per cry. Set
+// VITE_LIVE_BABY_SFX=1 to enable.
 const LIVE_BABY_SFX = import.meta.env.VITE_LIVE_BABY_SFX === "1";
-const LIVE_MUSIC = import.meta.env.VITE_LIVE_MUSIC === "1";
+// Live music (Lyria-002 via Vertex AI) is default ON — the dynamic theme is
+// the product. Falls back to /audio/music/probation-theme.mp3 silently if the
+// call fails or the GOOGLE_SERVICE_ACCOUNT_JSON secret is unset. Disable via
+// VITE_LIVE_MUSIC=0.
+const LIVE_MUSIC = import.meta.env.VITE_LIVE_MUSIC !== "0" && import.meta.env.VITE_LIVE_MUSIC !== "false";
 
 const CHANNEL_VOLUME: Partial<Record<AudioChannel, number>> = {
   baby: 0.6,
@@ -54,20 +61,59 @@ export class AudioDirector {
     }
   }
 
+  // Track which assetId is currently playing on each channel so we can
+  // ignore redundant "play same asset, same loop" calls (the engine's tick
+  // loop fires play_audio every game-hour while the cry persists).
+  private playing: Partial<Record<Channel, { assetId: string; loop: boolean }>> = {};
+
+  private fadeTo(el: HTMLAudioElement, target: number, durMs: number, onDone?: () => void) {
+    const start = performance.now();
+    const startVol = el.volume;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / durMs);
+      el.volume = startVol + (target - startVol) * t;
+      if (t < 1) {
+        requestAnimationFrame(step);
+      } else if (onDone) {
+        onDone();
+      }
+    };
+    requestAnimationFrame(step);
+  }
+
   private async play(channel: Channel, assetId: string, loop: boolean): Promise<void> {
     if (!this.unlocked) return;
+
+    // Skip if the same asset is already looping on the same channel — avoids
+    // restarting the cry every engine tick.
+    const cur = this.playing[channel];
+    if (cur && cur.assetId === assetId && cur.loop === loop && this.elements[channel]) return;
 
     const url = await this.resolveUrl(assetId);
     if (!url) return;
 
-    this.stop(channel);
+    const targetVol = CHANNEL_VOLUME[channel] ?? 0.6;
+
+    // Fade-out any current element on this channel (don't cut abruptly).
+    const prev = this.elements[channel];
+    if (prev) {
+      const oldEl = prev;
+      this.fadeTo(oldEl, 0, 240, () => {
+        oldEl.pause();
+        oldEl.src = "";
+      });
+    }
+
     const el = new Audio(url);
     el.loop = loop;
-    el.volume = CHANNEL_VOLUME[channel] ?? 0.6;
+    el.volume = 0;
     el.play().catch(() => {
       // Autoplay rejected or file missing — silent fail keeps the demo running.
     });
     this.elements[channel] = el;
+    this.playing[channel] = { assetId, loop };
+    // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
+    this.fadeTo(el, targetVol, 300);
   }
 
   // Resolve the URL to use for a given assetId.
@@ -129,6 +175,22 @@ export class AudioDirector {
     return ASSET_URLS[assetId];
   }
 
+  /**
+   * Kick off a live-asset fetch in the background so its blob URL is cached
+   * by the time `play()` is called. Use at game start for assets we know we'll
+   * play later (e.g. probation-theme music at finger-snap) — otherwise the
+   * Lyria call's 20–60 s latency would beat the cinematic timing.
+   *
+   * Safe to call multiple times — second call resolves to cached URL instantly.
+   * Returns a promise that resolves when the prefetch completes (or when the
+   * fetch falls back to the pre-baked URL).
+   */
+  prefetch(assetId: string): Promise<void> {
+    return this.resolveUrl(assetId).then(() => {
+      /* result discarded — side-effect populates liveBlobUrls cache */
+    });
+  }
+
   // Fire-and-forget one-shot SFX outside the channel-tracked map so it can't be cut by stop().
   playOneShot(assetId: string, volume = 0.85): void {
     if (!this.unlocked) return;
@@ -144,17 +206,24 @@ export class AudioDirector {
     if (target === "all") {
       for (const ch of Object.keys(this.elements) as Channel[]) {
         const el = this.elements[ch];
-        el?.pause();
-        if (el) el.currentTime = 0;
+        if (!el) continue;
+        this.fadeTo(el, 0, 220, () => {
+          el.pause();
+          el.currentTime = 0;
+        });
         delete this.elements[ch];
+        delete this.playing[ch];
       }
       return;
     }
     const el = this.elements[target];
     if (el) {
-      el.pause();
-      el.currentTime = 0;
+      this.fadeTo(el, 0, 220, () => {
+        el.pause();
+        el.currentTime = 0;
+      });
       delete this.elements[target];
+      delete this.playing[target];
     }
   }
 

@@ -1,0 +1,86 @@
+/* Looping logo carousel — two copies of the list translate -50% over a long
+ * cycle so the loop is seamless. Pause on hover so users can read. */
+
+.logo-strip {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding: 6px 0;
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+}
+
+.logo-track {
+  display: flex;
+  width: max-content;
+  animation: logo-marquee 32s linear infinite;
+}
+
+.logo-strip:hover .logo-track {
+  animation-play-state: paused;
+}
+
+.logo-track ul {
+  display: flex;
+  align-items: center;
+  gap: 42px;
+  padding: 0 21px;
+  margin: 0;
+  list-style: none;
+}
+
+.logo-track li {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  flex-shrink: 0;
+  opacity: 0.62;
+  transition: opacity 0.2s ease;
+}
+
+.logo-track li:hover {
+  opacity: 1;
+}
+
+.logo-track img {
+  height: 100%;
+  width: auto;
+  max-width: 130px;
+  display: block;
+  user-select: none;
+}
+
+/* Monochrome logos pick up currentColor so they integrate with the gold/cream theme. */
+.logo-track li.logo-mono {
+  color: rgba(245, 220, 140, 0.88);
+}
+
+.logo-track li.logo-mono img {
+  /* CSS filter approach: convert dark SVG fills to the light text color via brightness. */
+  filter: brightness(0) saturate(100%) invert(91%) sepia(13%) saturate(580%) hue-rotate(335deg) brightness(101%) contrast(96%);
+}
+
+@keyframes logo-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-track {
+    animation-duration: 90s;
+  }
+}

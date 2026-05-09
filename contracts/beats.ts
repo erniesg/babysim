@@ -52,7 +52,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "Welcome to Probation." }],
     exitConditions: ["audio_unlocked", "splash_acknowledged"],
     possibleNextBeats: ["officer_intro"],
-    timeoutMs: 5000,
+    timeoutMs: 2200,
     fallbackBeat: "officer_intro",
   },
   officer_intro: {
@@ -62,9 +62,13 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [
       { type: "SET_CAPTION", text: "Officer intake begins. This is a stress rehearsal, not medical advice." },
     ],
-    exitConditions: ["officer_intro_complete"],
-    possibleNextBeats: ["photo_intake"],
+    exitConditions: ["officer_intro_complete", "intake_choice_made"],
+    // The Adopt-or-Generate chooser pops in-stage at the END of officer_intro
+    // (before scene_ack), then the engine routes straight into verification —
+    // photo_intake is skipped because RPS captures a webcam frame as the case file.
+    possibleNextBeats: ["verification_games", "photo_intake"],
   },
+  // Kept for backwards compat / opt-in; current flow skips it.
   photo_intake: {
     id: "photo_intake",
     phase: "intake",
@@ -116,7 +120,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "Your child has arrived." }],
     exitConditions: ["arrival_acknowledged"],
     possibleNextBeats: ["first_calm"],
-    timeoutMs: 8000,
+    timeoutMs: 4500,
     fallbackBeat: "first_calm",
   },
   first_calm: {
@@ -126,7 +130,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "The room is quiet. For now." }],
     exitConditions: ["first_cry_triggered"],
     possibleNextBeats: ["first_cry"],
-    timeoutMs: 8000,
+    timeoutMs: 5000,
     fallbackBeat: "first_cry",
   },
   first_cry: {
@@ -139,6 +143,9 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     ],
     exitConditions: ["soothing_attempted"],
     possibleNextBeats: ["discovery_soothing"],
+    // Safety net so the game never hangs here even if the player goes idle.
+    timeoutMs: 12000,
+    fallbackBeat: "discovery_soothing",
   },
   discovery_soothing: {
     id: "discovery_soothing",
@@ -147,7 +154,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "Watch how the baby reacts. The right response depends on hidden traits." }],
     exitConditions: ["cry_resolved"],
     possibleNextBeats: ["time_jump_evening"],
-    timeoutMs: 25000,
+    timeoutMs: 14000,
     fallbackBeat: "time_jump_evening",
   },
   time_jump_evening: {
@@ -174,7 +181,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     ],
     exitConditions: ["night_responsibility_chosen"],
     possibleNextBeats: ["shirk_or_wake", "night_soothe"],
-    timeoutMs: 15000,
+    timeoutMs: 9000,
     fallbackBeat: "shirk_or_wake",
   },
   shirk_or_wake: {
@@ -184,7 +191,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "Your choice is now part of the ledger." }],
     exitConditions: ["argument_started", "shift_accepted"],
     possibleNextBeats: ["argument_start", "night_soothe"],
-    timeoutMs: 12000,
+    timeoutMs: 8000,
     fallbackBeat: "argument_start",
   },
   argument_start: {
@@ -205,7 +212,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     entryEffects: [{ type: "SET_CAPTION", text: "Someone has to take the shift." }],
     exitConditions: ["conceder_selected", "shift_logged"],
     possibleNextBeats: ["night_soothe"],
-    timeoutMs: 20000,
+    timeoutMs: 12000,
     fallbackBeat: "night_soothe",
   },
   night_soothe: {
@@ -218,7 +225,7 @@ export const BEAT_GRAPH: Record<BeatId, BeatSpec> = {
     ],
     exitConditions: ["night_cry_resolved"],
     possibleNextBeats: ["cute_payoff"],
-    timeoutMs: 25000,
+    timeoutMs: 12000,
     fallbackBeat: "cute_payoff",
   },
   cute_payoff: {

@@ -17,15 +17,15 @@ This gives every parallel task a working integration target.
 
 ## Worktrees After Main Loop
 
-| Worktree | Scope | Constraint |
-| --- | --- | --- |
-| `codex/do-session-adapter` | Worker, `GameSessionDO`, WebSocket transport, `/api/session`. | Must preserve local transport behavior. |
-| `codex/voice-analysis` | Mic permission, volume/rhythm/pitch-ish features, `voice_input`. | Must keep button fallback. |
-| `codex/partner-agent` | Partner archetypes, scripted line variants, Realtime fallback path. | No beat graph rewrites. |
-| `codex/muppet-scene` | Integrate existing Officer Tan muppet and patch mic cleanup. | Static officer fallback remains. |
-| `codex/baby-2p5d-runtime` | Replace preview PNG swaps with existing 2.5D puppet runtime. | Preview PNG fallback remains. |
-| `codex/debrief-card` | Dynamic gacha card from event log; GPT optional. | Template fallback required. |
-| `codex/director-agent` | LLM GM emits validated `DirectorCommand`s. | Cannot mutate state directly. |
+| Worktree | Scope | Constraint | Status |
+| --- | --- | --- | --- |
+| `codex/do-session-adapter` | Worker, `GameSessionDO`, WebSocket transport, `/api/session`. | Must preserve local transport behavior. | Pending (no DO wired) |
+| `codex/voice-analysis` | Mic permission, volume/rhythm/pitch-ish features, `voice_input`. | Must keep button fallback. | Shipped (`SingMicCapture`, RPS via MediaPipe `HandLandmarker`) |
+| `codex/partner-agent` | Partner archetypes, scripted line variants, Realtime fallback path. | No beat graph rewrites. | Shipped (`/api/partner/line` Gemini Flash Lite + scripted fallback) |
+| `codex/muppet-scene` | Integrate Officer muppet rig and patch mic cleanup. | Static officer fallback remains. | Shipped (Three.js muppet, ElevenLabs voice path, badge logo cycle) |
+| `codex/baby-2p5d-runtime` | Replace preview PNG swaps with the 2.5D puppet runtime. | Preview PNG fallback remains. | Shipped (`src/baby-rig/PuppetCanvas.tsx`, 14-layer rig, vignette + cross-fade) |
+| `codex/debrief-card` | Dynamic gacha card from event log; GPT optional. | Template fallback required. | Shipped template path; GPT live-debrief still optional |
+| `codex/director-agent` | LLM GM emits validated `DirectorCommand`s. | Cannot mutate state directly. | Shipped (`/api/gm`, server-side `BEAT_GRAPH` validation) |
 
 ## Do Not Parallelize Early
 

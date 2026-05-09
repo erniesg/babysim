@@ -1,24 +1,42 @@
-// Cinematic clip endpoint — Seedance 2.0 OR Veo-3.1-fast via Replicate (2-step async job).
+// Cinematic clip endpoint — Seedance 2.0 OR Veo-3.1-fast via Replicate,
+// OR Kling Video v3 Pro via fal.ai (2-step async job).
 // POST /api/cinematic   → initiates generation, returns { predictionId, status, pollUrl, provider }
-// GET  /api/cinematic?id=...  → polls Replicate; returns { status, videoUrl } once ready.
+// GET  /api/cinematic?id=...  → polls Replicate OR fal.ai; returns { status, videoUrl } once ready.
 //
 // Replicate predictions take 1-3 min for video. The initiate step kicks off the job
 // and returns immediately with a predictionId. The poll step checks until "succeeded",
-// then returns the Replicate delivery URL (frontend uses it as <video src>).
-// We do NOT proxy video bytes — frontend fetches the Replicate CDN URL directly.
+// then returns the delivery URL (frontend uses it as <video src>).
+// We do NOT proxy video bytes — frontend fetches the CDN URL directly.
 //
-// Provider is selectable via body.provider: "seedance" | "veo" (default "seedance").
+// Provider is selectable via body.provider: "seedance" | "veo" | "fal" (default "seedance").
 // Veo-3.1-fast is more permissive on infant content (Bytedance's Seedance moderation
 // rejects photoreal newborn frames with E005). Veo also supports negative_prompt.
+// fal provider uses Kling Video v3 Pro, which also passes infant frames without E005.
+//
+// fal.ai provider notes:
+//   Model: fal-ai/kling-video/v3/pro/image-to-video
+//   Rationale: Kling v3 Pro produces cinematic motion with fluid physics and native audio,
+//   matching Seedance's quality while bypassing ByteDance's content moderation.
+//   Veo 3.1 is also available on fal (fal-ai/veo3.1/image-to-video) but Kling is
+//   generally faster (30-90s vs 60-180s) and has better frame-to-frame continuity.
+//   Endpoint:   POST https://queue.fal.run/fal-ai/kling-video/v3/pro/image-to-video
+//   Poll:       GET  https://queue.fal.run/fal-ai/kling-video/v3/pro/image-to-video/requests/{id}/status
+//   Result:     GET  https://queue.fal.run/fal-ai/kling-video/v3/pro/image-to-video/requests/{id}
+//   Auth:       Authorization: Key $FAL_KEY
+//   Cold start: none — Kling stays warm on fal; typical queue 5-15 s, generation 30-90 s.
+//   Rate limit: free tier 30 req/min; paid: billed per second of generated video.
+//
+// Poll IDs are prefixed "fal:" so handlePoll can dispatch to the correct upstream.
 //
 // If fromState + toState are provided, the start/end frame PNGs hosted on this Worker
 // are passed as the start and end frame keys (which differ per provider — see PROVIDERS).
 
 export interface CinematicEnv {
   REPLICATE_API_TOKEN: string;
+  FAL_KEY?: string;
 }
 
-type CinematicProvider = "seedance" | "veo";
+type CinematicProvider = "seedance" | "veo" | "fal";
 
 interface ProviderConfig {
   modelVersion: string;
@@ -29,7 +47,8 @@ interface ProviderConfig {
   supportsNegativePrompt: boolean;
 }
 
-const PROVIDERS: Record<CinematicProvider, ProviderConfig> = {
+// Replicate-only — fal uses its own helper (falCinematic) with no shared config.
+const PROVIDERS: Record<"seedance" | "veo", ProviderConfig> = {
   // bytedance/seedance-2.0
   seedance: {
     modelVersion: "4631ca9b77b48db08836df4527a436455c4eddff6b25dbc12e541f262aaab774",
@@ -51,6 +70,13 @@ const PROVIDERS: Record<CinematicProvider, ProviderConfig> = {
 };
 
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
+
+// fal.ai — Kling Video v3 Pro image-to-video
+const FAL_KLING_MODEL_ID = "fal-ai/kling-video/v3/pro/image-to-video";
+const FAL_KLING_QUEUE_BASE = `https://queue.fal.run/${FAL_KLING_MODEL_ID}`;
+
+// Prefix added to fal request IDs stored in pollUrl so handlePoll dispatches correctly.
+const FAL_ID_PREFIX = "fal:";
 
 // Baby states recognised by the system.
 const VALID_STATES = new Set([
@@ -79,23 +105,189 @@ interface ReplicatePrediction {
   urls?: { get: string };
 }
 
+interface FalKlingQueueResponse {
+  request_id: string;
+  status_url: string;
+  response_url: string;
+}
+
+interface FalKlingStatusResponse {
+  status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED";
+  queue_position?: number;
+}
+
+interface FalKlingResultResponse {
+  video?: { url: string; content_type: string };
+  error?: string;
+}
+
+// ── fal.ai cinematic helper ──────────────────────────────────────────────────
+// Submits a Kling v3 Pro request via fal's queue, returns 202 immediately with
+// a "fal:<request_id>" so handlePoll can route to the fal status endpoint.
+async function falCinematic(
+  body: {
+    prompt: string;
+    duration: number;
+    generateAudio: boolean;
+    startFrameUrl: string | null;
+    endFrameUrl: string | null;
+    negativePrompt?: string;
+  },
+  falKey: string,
+  log: (...args: unknown[]) => void,
+): Promise<Response> {
+  const falAuthHeader = `Key ${falKey}`;
+
+  const klingInput: Record<string, unknown> = {
+    prompt: body.prompt,
+    duration: body.duration,
+    generate_audio: body.generateAudio,
+    negative_prompt: body.negativePrompt ?? "blur, distort, low quality",
+    cfg_scale: 0.5,
+  };
+  if (body.startFrameUrl) klingInput["start_image_url"] = body.startFrameUrl;
+  if (body.endFrameUrl) klingInput["end_image_url"] = body.endFrameUrl;
+
+  let submission: FalKlingQueueResponse;
+  try {
+    const res = await fetch(FAL_KLING_QUEUE_BASE, {
+      method: "POST",
+      headers: {
+        "Authorization": falAuthHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(klingInput),
+    });
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 400);
+      log("fal kling submit failed", { status: res.status, detail });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: res.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    submission = await res.json() as FalKlingQueueResponse;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal kling submit threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  const compositeId = `${FAL_ID_PREFIX}${submission.request_id}`;
+  log("fal kling submitted", { request_id: submission.request_id });
+
+  return new Response(
+    JSON.stringify({
+      provider: "fal",
+      predictionId: compositeId,
+      status: "starting",
+      pollUrl: `/api/cinematic?id=${encodeURIComponent(compositeId)}`,
+    }),
+    { status: 202, headers: { ...corsHeaders, "content-type": "application/json" } },
+  );
+}
+
+// ── fal.ai poll helper ────────────────────────────────────────────────────────
+// Called by handlePoll when the id starts with FAL_ID_PREFIX.
+async function handleFalPoll(
+  falRequestId: string,
+  falKey: string,
+  log: (...args: unknown[]) => void,
+): Promise<Response> {
+  const falAuthHeader = `Key ${falKey}`;
+  const statusUrl = `${FAL_KLING_QUEUE_BASE}/requests/${falRequestId}/status`;
+
+  let statusBody: FalKlingStatusResponse;
+  try {
+    const statusRes = await fetch(statusUrl, {
+      headers: { "Authorization": falAuthHeader },
+    });
+    if (!statusRes.ok) {
+      const detail = (await statusRes.text()).slice(0, 400);
+      log("fal kling poll failed", { status: statusRes.status, detail });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: statusRes.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    statusBody = await statusRes.json() as FalKlingStatusResponse;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal kling status threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  log("fal kling status", { falRequestId, status: statusBody.status });
+
+  if (statusBody.status !== "COMPLETED") {
+    // Map fal's IN_QUEUE / IN_PROGRESS to the same polling shape the frontend expects
+    return new Response(
+      JSON.stringify({ status: "processing", videoUrl: null }),
+      { status: 202, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  // Fetch result
+  const resultUrl = `${FAL_KLING_QUEUE_BASE}/requests/${falRequestId}`;
+  let resultBody: FalKlingResultResponse;
+  try {
+    const resultRes = await fetch(resultUrl, {
+      headers: { "Authorization": falAuthHeader },
+    });
+    if (!resultRes.ok) {
+      const detail = (await resultRes.text()).slice(0, 400);
+      log("fal kling result failed", { status: resultRes.status, detail });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: resultRes.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    resultBody = await resultRes.json() as FalKlingResultResponse;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal kling result threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  const videoUrl = resultBody.video?.url ?? null;
+  if (!videoUrl) {
+    log("fal kling result missing video url", JSON.stringify(resultBody).slice(0, 300));
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 200, detail: "fal result missing video url" }),
+      { status: 502, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  log("fal kling succeeded", { falRequestId, videoUrl: videoUrl.slice(0, 80) });
+  return new Response(
+    JSON.stringify({ status: "succeeded", videoUrl }),
+    {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "content-type": "application/json",
+        "cache-control": "public, max-age=3600",
+      },
+    },
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // POST /api/cinematic — initiate generation
 async function handleInitiate(
   request: Request,
   env: CinematicEnv,
   log: (...args: unknown[]) => void,
 ): Promise<Response> {
-  if (!env.REPLICATE_API_TOKEN) {
-    log("no REPLICATE_API_TOKEN");
-    return new Response(
-      JSON.stringify({
-        error: "REPLICATE_API_TOKEN not configured",
-        detail: "Set this Worker secret to enable Seedance 2.0 cinematic generation",
-      }),
-      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
-    );
-  }
-
   let body: {
     prompt?: string;
     fromState?: string;
@@ -105,7 +297,7 @@ async function handleInitiate(
     provider?: string;
     imageUrl?: string;        // explicit start-frame URL (overrides fromState→PNG)
     lastFrameUrl?: string;    // explicit end-frame URL (overrides toState→PNG)
-    negativePrompt?: string;  // veo-only
+    negativePrompt?: string;  // veo-only; also accepted by fal/kling
   };
   try {
     body = await request.json();
@@ -126,8 +318,66 @@ async function handleInitiate(
   }
 
   const provider: CinematicProvider =
-    body.provider === "veo" ? "veo" : "seedance";
-  const cfg = PROVIDERS[provider];
+    body.provider === "veo" ? "veo" : body.provider === "fal" ? "fal" : "seedance";
+
+  // fal branch — delegate entirely to falCinematic helper
+  if (provider === "fal") {
+    if (!env.FAL_KEY) {
+      log("no FAL_KEY");
+      return new Response(
+        JSON.stringify({ error: "FAL_KEY not configured", detail: "Set this Worker secret to enable fal.ai Kling cinematic generation" }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    const fromStateFal =
+      typeof body.fromState === "string" && VALID_STATES.has(body.fromState)
+        ? (body.fromState as BabyState)
+        : null;
+    const toStateFal =
+      typeof body.toState === "string" && VALID_STATES.has(body.toState)
+        ? (body.toState as BabyState)
+        : null;
+    const durationFal =
+      typeof body.duration === "number" && body.duration >= 3 && body.duration <= 15
+        ? body.duration
+        : 5;
+    const generateAudioFal = body.generateAudio !== false;
+    const startFrameUrlFal =
+      typeof body.imageUrl === "string" && body.imageUrl
+        ? body.imageUrl
+        : fromStateFal ? `${BASE_ASSET_URL}/${fromStateFal}.png` : null;
+    const endFrameUrlFal =
+      typeof body.lastFrameUrl === "string" && body.lastFrameUrl
+        ? body.lastFrameUrl
+        : toStateFal ? `${BASE_ASSET_URL}/${toStateFal}.png` : null;
+    log("initiating fal kling prediction", { fromState: fromStateFal, toState: toStateFal, duration: durationFal, generateAudio: generateAudioFal });
+    return falCinematic(
+      {
+        prompt,
+        duration: durationFal,
+        generateAudio: generateAudioFal,
+        startFrameUrl: startFrameUrlFal,
+        endFrameUrl: endFrameUrlFal,
+        negativePrompt: typeof body.negativePrompt === "string" ? body.negativePrompt : undefined,
+      },
+      env.FAL_KEY,
+      log,
+    );
+  }
+
+  // Replicate path (seedance | veo) — require REPLICATE_API_TOKEN
+  if (!env.REPLICATE_API_TOKEN) {
+    log("no REPLICATE_API_TOKEN");
+    return new Response(
+      JSON.stringify({
+        error: "REPLICATE_API_TOKEN not configured",
+        detail: "Set this Worker secret to enable Seedance 2.0 cinematic generation",
+      }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  const cfg = PROVIDERS[provider as "seedance" | "veo"];
 
   const fromState =
     typeof body.fromState === "string" && VALID_STATES.has(body.fromState)
@@ -261,6 +511,20 @@ async function handlePoll(
   env: CinematicEnv,
   log: (...args: unknown[]) => void,
 ): Promise<Response> {
+  // Dispatch to fal helper when the ID carries the "fal:" prefix.
+  if (predictionId.startsWith(FAL_ID_PREFIX)) {
+    if (!env.FAL_KEY) {
+      log("no FAL_KEY for fal poll");
+      return new Response(
+        JSON.stringify({ error: "FAL_KEY not configured" }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    const falRequestId = predictionId.slice(FAL_ID_PREFIX.length);
+    return handleFalPoll(falRequestId, env.FAL_KEY, log);
+  }
+
+  // Replicate poll path
   if (!env.REPLICATE_API_TOKEN) {
     log("no REPLICATE_API_TOKEN for poll");
     return new Response(

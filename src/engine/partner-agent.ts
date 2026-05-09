@@ -24,6 +24,25 @@ const SCRIPTED_LINES: Record<PartnerState["traits"]["archetype"], ArchetypeLines
       default: "Oh god, they're really watching us. I read all the books but... what if it's not enough?",
       high_resentment: "Are you even worried? I've been losing sleep over this for weeks.",
     },
+    baby_arrival: {
+      default: "She's here. She's actually here. I'm trying not to overthink this.",
+    },
+    first_calm: {
+      default: "Don't jinx it. Don't say anything. Just breathe.",
+    },
+    first_cry: {
+      default: "Okay - okay, what does that cry mean? Hungry? Tired? I don't know yet.",
+      tired: "I haven't slept and now I can't think straight.",
+    },
+    discovery_soothing: {
+      default: "Try something. Anything. We'll learn what works.",
+    },
+    time_jump_evening: {
+      default: "Did the day just disappear?",
+    },
+    night_cry: {
+      default: "(asleep — breathing fast)",
+    },
     argument_start: {
       shirked: "You just... didn't get up? The baby was crying for twenty minutes.",
       tired: "I can't keep doing this alone. I'm exhausted. I'm actually shaking.",
@@ -39,12 +58,37 @@ const SCRIPTED_LINES: Record<PartnerState["traits"]["archetype"], ArchetypeLines
     shirk_or_wake: {
       default: "Were you going to get up? I wasn't sure if you heard.",
     },
+    cute_payoff: {
+      default: "Did you see that? She SMILED. That was real.",
+    },
+    verdict: {
+      default: "Don't say anything weird. Don't say anything weird.",
+    },
   },
 
   chill: {
     officer_intro: {
       default: "Yeah, okay. We've got this.",
       high_resentment: "Sure.",
+    },
+    baby_arrival: {
+      default: "Hey, kiddo. We're gonna figure each other out.",
+    },
+    first_calm: {
+      default: "Quiet's nice while it lasts.",
+    },
+    first_cry: {
+      default: "Okay, here we go.",
+      tired: "Yeah, yeah, I hear it.",
+    },
+    discovery_soothing: {
+      default: "Just try something. Babies aren't precious crystal.",
+    },
+    time_jump_evening: {
+      default: "Was that today? Time is fake.",
+    },
+    night_cry: {
+      default: "(asleep — out cold)",
     },
     argument_start: {
       shirked: "So you didn't go. Okay. That's... okay. It's not okay, actually.",
@@ -62,12 +106,37 @@ const SCRIPTED_LINES: Record<PartnerState["traits"]["archetype"], ArchetypeLines
       tired: "Mm.",
       default: "You need help?",
     },
+    cute_payoff: {
+      default: "Yeah. Yeah, that one was for us.",
+    },
+    verdict: {
+      default: "Whatever they say, we did fine.",
+    },
   },
 
   resentful: {
     officer_intro: {
       default: "I keep a spreadsheet. Hours logged, feeds done, wakeups taken. I'm not ashamed.",
       high_resentment: "Someone has to track it. It won't be acknowledged otherwise.",
+    },
+    baby_arrival: {
+      default: "I read every book. You read the back covers. Just so we're clear who's prepared.",
+    },
+    first_calm: {
+      default: "Enjoy this. You'll be sleeping through the next eight cries.",
+    },
+    first_cry: {
+      default: "Are you going to handle it, or am I?",
+      shirked: "Of course it's already on me.",
+    },
+    discovery_soothing: {
+      default: "Try the obvious one first. Don't experiment for fun.",
+    },
+    time_jump_evening: {
+      default: "I logged six feeds. You logged two.",
+    },
+    night_cry: {
+      default: "(asleep — but tracking shifts in their head)",
     },
     argument_start: {
       shirked: "That's three times this week you've let me handle it. Three. I wrote it down.",
@@ -86,12 +155,36 @@ const SCRIPTED_LINES: Record<PartnerState["traits"]["archetype"], ArchetypeLines
       shirked: "Really? You're not going?",
       default: "I clocked the last two shifts.",
     },
+    cute_payoff: {
+      default: "...okay. That was nice. Don't ruin it.",
+    },
+    verdict: {
+      default: "If they don't see what I'm doing here I'm submitting an appeal.",
+    },
   },
 
   overfunctioner: {
     officer_intro: {
       default: "I've already researched four soothing methods, hired a postpartum doula, and batch-cooked six weeks of meals.",
       tired: "I'm fine. Honestly, I'm fine. I just need everyone else to be okay.",
+    },
+    baby_arrival: {
+      default: "I have the bottles labeled, the swaddles laid out, and the pediatrician on speed dial.",
+    },
+    first_calm: {
+      default: "Should I prep the next feed? I should prep the next feed.",
+    },
+    first_cry: {
+      default: "I've got it. You don't have to do anything. I'll handle it.",
+    },
+    discovery_soothing: {
+      default: "Want me to take over? I can take over.",
+    },
+    time_jump_evening: {
+      default: "I made dinner. And lunch. And tomorrow's breakfast.",
+    },
+    night_cry: {
+      default: "(asleep — finally — but only because they crashed)",
     },
     argument_start: {
       shirked: "I was going to do it. I always end up doing it. That's the problem.",
@@ -108,6 +201,12 @@ const SCRIPTED_LINES: Record<PartnerState["traits"]["archetype"], ArchetypeLines
     shirk_or_wake: {
       tired: "Do you want me to take it? I can take it.",
       default: "I can handle it if you need me to.",
+    },
+    cute_payoff: {
+      default: "I knew tummy time would help. I knew it.",
+    },
+    verdict: {
+      default: "I prepared a binder. Three sections. Color-coded.",
     },
   },
 };

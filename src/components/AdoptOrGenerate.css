@@ -1,0 +1,169 @@
+.adopt-generate {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* In-stage variant — overlays on top of the muppet stage at officer_intro
+ * completion. The muppet remains visible behind a darkened backdrop so
+ * the officer reads the choice with the player. */
+.intake-choice-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.78) 100%);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10;
+  animation: intake-fade-in 0.32s ease-out;
+}
+
+.intake-choice-overlay .adopt-generate {
+  width: 100%;
+  max-width: 720px;
+}
+
+@keyframes intake-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.adopt-generate-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(245, 220, 140, 0.06);
+  border: 1px solid rgba(245, 220, 140, 0.18);
+  border-radius: 12px;
+}
+
+.adopt-generate-quote {
+  margin: 0;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.adopt-generate-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .adopt-generate-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.adopt-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  background: rgba(10, 5, 4, 0.72);
+  border: 1px solid #2a1d18;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  color: inherit;
+}
+
+.adopt-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+.adopt-card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.adopt-card-art {
+  position: relative;
+  height: 180px;
+  background: radial-gradient(circle at 50% 35%, #2a1410 0%, #0c0606 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.adopt-card-art img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.adopt-card-art-gen {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(167, 139, 250, 0.4), transparent 55%),
+    radial-gradient(circle at 70% 65%, rgba(252, 165, 165, 0.32), transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(245, 220, 140, 0.18), transparent 70%),
+    #0c0606;
+}
+
+.adopt-card-glyph {
+  font-size: 48px;
+  filter: drop-shadow(0 0 18px rgba(255, 220, 140, 0.6));
+  animation: adopt-glyph-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes adopt-glyph-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+.adopt-card-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 9px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(245, 220, 140, 0.42);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.adopt-card-body {
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adopt-card-body h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.adopt-card-body p {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.adopt-card-meta {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245, 220, 140, 0.7);
+  font-weight: 600;
+}

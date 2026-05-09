@@ -17,7 +17,11 @@ export type ClientMessage =
   | { type: "scene_ack"; beatId: string }
   | { type: "partner_speech_finished" }
   | { type: "panic" }
-  | { type: "skip_to"; beatId: string };
+  | { type: "skip_to"; beatId: string }
+  // Baby-agent consultative events — applied through reducer; engine clamps.
+  | { type: "agent_set_visual_state"; state: BabyVisualState }
+  | { type: "agent_set_mood_delta"; delta: number }
+  | { type: "agent_set_need_delta"; need: "hunger" | "sleepiness" | "discomfort" | "connection" | "health"; delta: number };
 
 export type RenderState = {
   sessionId: string;

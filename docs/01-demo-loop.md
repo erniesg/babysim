@@ -10,10 +10,10 @@ The spine is fixed for demo reliability. The details inside each beat are dynami
 | `probation_splash` | `intake` | Begin | Unlocks audio and shows "Welcome to Probation." |
 | `officer_intro` | `intake` | Continue / answer | Random officer appears. Muppet scene if available; static fallback otherwise. |
 | `photo_intake` | `intake` | Upload/webcam/skip | Photo is client-memory theater. If one person, ask for partner photo or system match. |
-| `verification_games` | `generation` | Answer checks | Night-shift, support, and panic-plan checks while progress advances. |
+| `verification_games` | `generation` | Answer checks | Bureaucratic intake checks (rock-paper-scissors via MediaPipe HandLandmarker is the live one) while progress advances. |
 | `generation_progress` | `generation` | Wait / complete checks | Uses bundled assets now; generated media can replace later. |
 | `ominous_warning` | `generation` | Continue | Officer warns that care labor and shirking are tracked. |
-| `baby_roll` | `reveal` | Name baby | Rolls gender, baby traits, partner traits, and officer flavor. |
+| `baby_roll` | `reveal` | Name baby + Adopt-or-Generate | Rolls gender, baby traits, partner traits, officer flavor. Player picks **Adopt** (canonical 2.5D rig at `/puppets/baby/`) or **Generate** (live `gpt-image-2` portrait via `/api/baby/portrait`). |
 | `baby_arrival` | `reveal` | Continue | "Your child has arrived." Partner reacts in character. |
 | `first_calm` | `gameplay` | Observe / act | Baby begins initialized with randomized needs. |
 | `first_cry` | `gameplay` | Try actions | Dominant need pressure triggers cry, baby audio, and visual state. |
@@ -32,7 +32,7 @@ The spine is fixed for demo reliability. The details inside each beat are dynami
 
 Default timing target:
 
-- Full run: 2-3 minutes.
+- Full run: ~100 s end-to-end after the post-build trim (most cinematic beats now have shorter `timeoutMs` — see `contracts/beats.ts`).
 - `realSecondsPerGameHour`: configurable.
 - Night sequence can be forced by `skip_to` during demos.
 

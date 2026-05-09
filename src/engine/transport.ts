@@ -138,7 +138,12 @@ export class LocalGameTransport implements GameTransport {
 
         const autoAdvanceBeats: Partial<Record<BeatId, BeatId>> = {
           probation_splash: "officer_intro",
-          officer_intro: "photo_intake",
+          // officer_intro now goes straight to verification — the player's
+          // case file is captured from the webcam during RPS instead of via
+          // a separate photo intake screen. AdoptOrGenerate runs as an in-stage
+          // overlay during officer_intro completion, so partner type is set
+          // before this scene_ack fires.
+          officer_intro: "verification_games",
           verification_games: "generation_progress",
           generation_progress: "ominous_warning",
           time_jump_evening: "night_cry",
@@ -155,6 +160,24 @@ export class LocalGameTransport implements GameTransport {
       case "partner_speech_finished":
         // Triggers partner speech completion. Future: drives Realtime handoff.
         break;
+
+      case "agent_set_visual_state": {
+        const evt = makeGameEvent("baby", "AGENT_VISUAL_STATE", { visualState: message.state });
+        this.runtime.dispatchAgentEvent(evt);
+        break;
+      }
+
+      case "agent_set_mood_delta": {
+        const evt = makeGameEvent("baby", "AGENT_NEED_DELTA", { need: "mood", delta: message.delta });
+        this.runtime.dispatchAgentEvent(evt);
+        break;
+      }
+
+      case "agent_set_need_delta": {
+        const evt = makeGameEvent("baby", "AGENT_NEED_DELTA", { need: message.need, delta: message.delta });
+        this.runtime.dispatchAgentEvent(evt);
+        break;
+      }
     }
   }
 

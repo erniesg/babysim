@@ -1,9 +1,37 @@
-// Baby portrait endpoint — Replicate openai/gpt-image-2 for live baby visuals.
-// Returns image/png bytes, cached 1h.
+// Baby portrait endpoint — Replicate openai/gpt-image-2 OR fal.ai fal-ai/flux-pro/v1.1
+// for live baby visuals. Returns image/png bytes, cached 1h.
 // Frontend falls back to pre-baked /img/baby/{state}.png if this returns non-200.
+//
+// ── fal.ai provider notes ────────────────────────────────────────────────────
+// Model chosen: fal-ai/flux-pro/v1.1
+//   Rationale: FLUX 1.1 Pro produces photorealistic portraits with strong
+//   composition and prompt adherence. Supports safety_tolerance (1–6) which
+//   lets us dial past overly-conservative defaults for newborn skin tones.
+//   Recraft-v3 was considered but specialises in graphic/vector aesthetics;
+//   FLUX Pro is the better fit for photographic-painterly newborn portraits.
+//
+// Endpoint URL pattern:
+//   Queue (async):  POST https://queue.fal.run/fal-ai/flux-pro/v1.1
+//                   GET  https://queue.fal.run/fal-ai/flux-pro/v1.1/requests/{id}/status
+//                   GET  https://queue.fal.run/fal-ai/flux-pro/v1.1/requests/{id}
+//
+// Auth header:      Authorization: Key $FAL_KEY
+//
+// Flow chosen:      Queue/poll — same pattern as Replicate's async flow. fal also
+//   exposes sync_mode=true which returns a data URI immediately, but sync blocks
+//   the GPU runner for the full generation time and is rate-limited more
+//   aggressively. Queue is safer for Worker concurrency.
+//
+// Cold-start / rate limits:
+//   FLUX Pro 1.1 has dedicated capacity on fal; typical queue wait is 2–8 s on
+//   warm runners with no cold start penalty (fal keeps the model loaded).
+//   Free tier: 30 req/min. Paid: no hard limit, billed per megapixel.
+//   1024×1024 = 1 MP = $0.04/image.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface BabyPortraitEnv {
   REPLICATE_API_TOKEN: string;
+  FAL_KEY?: string;
   // Legacy Gemini keys kept as optional so the shared Env interface stays valid.
   GEMINI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
@@ -68,6 +96,10 @@ function buildPrompt(state: BabyVisualState, gender: BabyGender, traits: BabyTra
 const REPLICATE_VERSION = "9ea921ca3eea597fe8773474545f54601fe1d30bc62517fb30fd86f42e4bb3cf";
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
+// fal.ai model: fal-ai/flux-pro/v1.1
+const FAL_MODEL_ID = "fal-ai/flux-pro/v1.1";
+const FAL_QUEUE_BASE = `https://queue.fal.run/${FAL_MODEL_ID}`;
+
 interface ReplicatePrediction {
   id: string;
   status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
@@ -75,23 +107,179 @@ interface ReplicatePrediction {
   error?: string;
 }
 
+interface FalQueueSubmitResponse {
+  request_id: string;
+  status_url: string;
+  response_url: string;
+}
+
+interface FalStatusResponse {
+  status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED";
+  queue_position?: number;
+}
+
+interface FalResultResponse {
+  images?: Array<{ url: string; content_type: string; width: number; height: number }>;
+  error?: string;
+}
+
 const corsHeaders = {
   "access-control-allow-origin": "*",
 };
+
+// ── fal.ai portrait helper ───────────────────────────────────────────────────
+// Submits a FLUX Pro 1.1 request via fal's queue API, polls until COMPLETED,
+// fetches the image bytes, and returns them as image/png.
+// Maps upstream errors to { error: "fal_error", upstreamStatus, detail }.
+async function falPortrait(
+  prompt: string,
+  falKey: string,
+  log: (...args: unknown[]) => void,
+): Promise<Response> {
+  const falAuthHeader = `Key ${falKey}`;
+
+  // Step 1 — submit to queue
+  let submission: FalQueueSubmitResponse;
+  try {
+    const res = await fetch(FAL_QUEUE_BASE, {
+      method: "POST",
+      headers: {
+        "Authorization": falAuthHeader,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        image_size: "square_hd",   // 1024×1024
+        output_format: "png",
+        num_images: 1,
+        safety_tolerance: "5",     // permissive — newborn skin tones trip lower levels
+        enhance_prompt: false,     // keep our carefully crafted prompt verbatim
+      }),
+    });
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 400);
+      log("fal submit failed", { status: res.status, detail });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: res.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    submission = await res.json() as FalQueueSubmitResponse;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal submit threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  log("fal submitted", { request_id: submission.request_id });
+
+  // Step 2 — poll status (up to 30 × 2 s = 60 s)
+  const statusUrl = `${FAL_QUEUE_BASE}/requests/${submission.request_id}/status`;
+  let completed = false;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const statusRes = await fetch(statusUrl, {
+        headers: { "Authorization": falAuthHeader },
+      });
+      if (!statusRes.ok) {
+        log("fal status poll error", { attempt, status: statusRes.status });
+        continue;
+      }
+      const statusBody = await statusRes.json() as FalStatusResponse;
+      log("fal status", { attempt, status: statusBody.status, queuePos: statusBody.queue_position });
+      if (statusBody.status === "COMPLETED") {
+        completed = true;
+        break;
+      }
+    } catch (err) {
+      log("fal status poll threw", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  if (!completed) {
+    log("fal timed out");
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 504, detail: "fal generation timed out" }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  // Step 3 — fetch result
+  const resultUrl = `${FAL_QUEUE_BASE}/requests/${submission.request_id}`;
+  let resultBody: FalResultResponse;
+  try {
+    const resultRes = await fetch(resultUrl, {
+      headers: { "Authorization": falAuthHeader },
+    });
+    if (!resultRes.ok) {
+      const detail = (await resultRes.text()).slice(0, 400);
+      log("fal result fetch failed", { status: resultRes.status, detail });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: resultRes.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    resultBody = await resultRes.json() as FalResultResponse;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal result fetch threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  const imageUrl = resultBody.images?.[0]?.url;
+  if (!imageUrl) {
+    log("fal result missing image url", JSON.stringify(resultBody).slice(0, 300));
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 200, detail: "fal result missing image url" }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  // Step 4 — proxy image bytes so the response shape matches the Replicate path
+  log("fetching fal image bytes", { imageUrl: imageUrl.slice(0, 80) });
+  try {
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) {
+      const detail = (await imgRes.text()).slice(0, 200);
+      log("fal image byte fetch failed", { status: imgRes.status });
+      return new Response(
+        JSON.stringify({ error: "fal_error", upstreamStatus: imgRes.status, detail }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    const imageBytes = await imgRes.arrayBuffer();
+    log("fal portrait ok", { byteLength: imageBytes.byteLength });
+    return new Response(imageBytes, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "content-type": "image/png",
+        "cache-control": "public, max-age=3600",
+      },
+    });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("fal image bytes threw", detail);
+    return new Response(
+      JSON.stringify({ error: "fal_error", upstreamStatus: 0, detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function babyPortraitHandler(request: Request, env: BabyPortraitEnv): Promise<Response> {
   const reqId = crypto.randomUUID();
   const log = (...args: unknown[]) => console.log(`[baby-portrait ${reqId}]`, ...args);
 
-  if (!env.REPLICATE_API_TOKEN) {
-    log("no REPLICATE_API_TOKEN");
-    return new Response(JSON.stringify({ error: "REPLICATE_API_TOKEN not configured" }), {
-      status: 503,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
-  }
-
-  let body: { state?: string; gender?: string; traits?: BabyTraits; babyName?: string };
+  let body: { state?: string; gender?: string; traits?: BabyTraits; babyName?: string; provider?: string };
   try {
     body = await request.json();
   } catch {
@@ -120,6 +308,30 @@ export async function babyPortraitHandler(request: Request, env: BabyPortraitEnv
   const traits: BabyTraits = body.traits ?? {};
   const babyName = typeof body.babyName === "string" ? body.babyName.slice(0, 40) : undefined;
   const prompt = buildPrompt(state, gender, traits, babyName);
+
+  // Route to fal.ai when explicitly requested.
+  const provider = body.provider === "fal" ? "fal" : "replicate";
+
+  if (provider === "fal") {
+    if (!env.FAL_KEY) {
+      log("no FAL_KEY");
+      return new Response(JSON.stringify({ error: "FAL_KEY not configured" }), {
+        status: 503,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
+    log("generating portrait via fal.ai flux-pro/v1.1", { state, gender, babyName, traitKeys: Object.keys(traits) });
+    return falPortrait(prompt, env.FAL_KEY, log);
+  }
+
+  // Default: Replicate gpt-image-2
+  if (!env.REPLICATE_API_TOKEN) {
+    log("no REPLICATE_API_TOKEN");
+    return new Response(JSON.stringify({ error: "REPLICATE_API_TOKEN not configured" }), {
+      status: 503,
+      headers: { ...corsHeaders, "content-type": "application/json" },
+    });
+  }
 
   log("generating portrait via Replicate gpt-image-2", { state, gender, babyName, traitKeys: Object.keys(traits) });
 

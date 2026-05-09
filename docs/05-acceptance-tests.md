@@ -16,12 +16,14 @@
 - Full run reaches debrief in 2-3 minutes.
 - Demo works without mic, OpenAI, Gemini, Convex, or generated videos.
 
-## Backend Parity
+## Backend Parity (deferred until Durable Object lands)
 
 - `LocalGameTransport` and `WebSocketGameTransport` produce equivalent visible behavior.
 - `GameSessionDO` sends latest state on reconnect.
 - `panic` works through the DO.
 - `skip_to` works for demo recovery.
+
+Today only `LocalGameTransport` is wired; the WS transport + `GameSessionDO` are still pending. These criteria activate when that work lands.
 
 ## Model Fallbacks
 

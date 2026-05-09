@@ -109,6 +109,23 @@ export class DirectorRuntime {
     this.state = reducer(this.state, event);
   }
 
+  // Apply a baby-agent consultative event (AGENT_VISUAL_STATE or AGENT_NEED_DELTA).
+  // These bypass the action-gate in dispatch() because they are system-level LLM deltas,
+  // not player actions. Engine clamps all values via reducer. No beat transitions fire.
+  dispatchAgentEvent(event: GameEvent): void {
+    if (this.stopped) return;
+    this.applyEvent(event);
+    // After an agent need delta, recompute visual state so PuppetCanvas stays in sync.
+    if (event.type === "AGENT_NEED_DELTA") {
+      const newVisual = visualState(this.state.baby);
+      this.state = {
+        ...this.state,
+        baby: { ...this.state.baby, visualState: newVisual },
+      };
+    }
+    this.emitStateUpdate();
+  }
+
   dispatch(event: GameEvent): void {
     if (this.stopped && event.type !== "PANIC") return;
 
@@ -148,6 +165,21 @@ export class DirectorRuntime {
     const beatId = this.state.beatId as BeatId;
 
     // Beat-specific action -> next beat mappings.
+    // Soothing actions all advance the cry beats forward — without these,
+    // first_cry / discovery_soothing have no exit (no timeout in BEAT_GRAPH
+    // for first_cry), and the game gets stuck in gameplay forever.
+    const SOOTHE: Partial<Record<string, BeatId>> = {
+      feed: "discovery_soothing",
+      rock: "discovery_soothing",
+      sing: "discovery_soothing",
+      shush: "discovery_soothing",
+      hold: "discovery_soothing",
+      check_diaper: "discovery_soothing",
+      adjust_temperature: "discovery_soothing",
+      reposition: "discovery_soothing",
+      wait: "discovery_soothing",
+    };
+
     const transitions: Partial<Record<BeatId, Partial<Record<string, BeatId>>>> = {
       home: { start_game: "probation_splash", create_room: "probation_splash", join_room: "probation_splash" },
       probation_splash: { answer_intake: "officer_intro" },
@@ -156,7 +188,10 @@ export class DirectorRuntime {
       ominous_warning: { answer_intake: "baby_roll" },
       baby_roll: { name_baby: "baby_arrival" },
       baby_arrival: { answer_intake: "first_calm" },
-      first_calm: {},
+      first_calm: SOOTHE,
+      first_cry: SOOTHE,
+      // discovery_soothing / night_soothe rely on timeouts (BEAT_GRAPH) so the
+      // player has time to try multiple actions before auto-advance.
       night_cry: {
         shirk: "shirk_or_wake",
         wake_partner: "shirk_or_wake",

@@ -4,6 +4,7 @@ import { RockPaperScissors } from "./verify/RockPaperScissors";
 import { VoiceVerify } from "./verify/VoiceVerify";
 import { KeyMash } from "./verify/KeyMash";
 import { KeySequence } from "./verify/KeySequence";
+import type { OfficerLine } from "./verify/officer-rps-lines";
 
 type ChallengeId = "rps" | "voice" | "keymash" | "konami";
 type ChallengeOutcome = "pass" | "fail" | "skip";
@@ -14,6 +15,13 @@ type Props = {
   officerName: string;
   durationMs?: number;
   onComplete: () => void;
+  /** Optional callback so a parent can react to each challenge outcome
+   *  (e.g., update the muppet's expression). Fires "waiting" on enter,
+   *  then "pass" / "fail" / "skip" per round. */
+  onChallengeOutcome?: (outcome: "waiting" | "pass" | "fail" | "skip") => void;
+  /** Optional — Game.tsx wires this to muppet.say() so the officer voices
+   *  the orchestration of each verification challenge in character. */
+  onOfficerSay?: (line: OfficerLine) => void;
 };
 
 const CHALLENGE_IDS: ChallengeId[] = ["rps", "voice", "keymash", "konami"];
@@ -40,7 +48,7 @@ interface ChallengeSharedProps {
   onSkip: (reason: string) => void;
 }
 
-export function VerificationGames({ officerName, durationMs = 11000, onComplete }: Props) {
+export function VerificationGames({ officerName, durationMs = 11000, onComplete, onChallengeOutcome, onOfficerSay }: Props) {
   // ─── challenge sequencing ───────────────────────────────────────────────────
   const [challengeIdx, setChallengeIdx] = useState(0);
   const [allDone, setAllDone] = useState(false);
@@ -62,7 +70,7 @@ export function VerificationGames({ officerName, durationMs = 11000, onComplete 
     return () => cancelAnimationFrame(raf);
   }, [durationMs]);
 
-  // ─── log initial challenge entry ────────────────────────────────────────────
+  // ─── log initial challenge entry + announce "waiting" so the muppet flips to skeptical ─
   const currentId = CHALLENGE_IDS[challengeIdx] as ChallengeId | undefined;
   useEffect(() => {
     if (!currentId) return;
@@ -75,7 +83,8 @@ export function VerificationGames({ officerName, durationMs = 11000, onComplete 
         ...log,
       ].slice(0, 12)
     );
-  }, [currentId, officerName]);
+    onChallengeOutcome?.("waiting");
+  }, [currentId, officerName, onChallengeOutcome]);
 
   // ─── shared advance logic ────────────────────────────────────────────────────
   const recordAndAdvance = useCallback(
@@ -90,6 +99,8 @@ export function VerificationGames({ officerName, durationMs = 11000, onComplete 
         ].slice(0, 12)
       );
 
+      onChallengeOutcome?.(outcome);
+
       setChallengeIdx((i) => {
         const next = i + 1;
         if (next >= CHALLENGE_IDS.length) {
@@ -98,7 +109,7 @@ export function VerificationGames({ officerName, durationMs = 11000, onComplete 
         return next;
       });
     },
-    []
+    [onChallengeOutcome]
   );
 
   // ─── fire onComplete exactly once when all done ─────────────────────────────
@@ -146,7 +157,7 @@ export function VerificationGames({ officerName, durationMs = 11000, onComplete 
             {CHALLENGE_LABELS[currentId]}
           </span>
 
-          {currentId === "rps" && <RockPaperScissors {...makeProps("rps")} />}
+          {currentId === "rps" && <RockPaperScissors {...makeProps("rps")} onOfficerSay={onOfficerSay} />}
           {currentId === "voice" && <VoiceVerify {...makeProps("voice")} />}
           {currentId === "keymash" && <KeyMash {...makeProps("keymash")} />}
           {currentId === "konami" && <KeySequence {...makeProps("konami")} />}

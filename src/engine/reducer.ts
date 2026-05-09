@@ -1,4 +1,4 @@
-import type { GameState, GameEvent, BabyNeeds, FairnessLedger } from "@contracts/game-state";
+import type { GameState, GameEvent, BabyNeeds, FairnessLedger, BabyTraits } from "@contracts/game-state";
 import { BEAT_GRAPH } from "@contracts/beats";
 import { clamp, deriveMood } from "@contracts/game-state";
 
@@ -14,6 +14,53 @@ function applyNeedsDelta(
     health: clamp(needs.health + (delta.health ?? 0)),
   };
   return { ...next, mood: deriveMood(next) };
+}
+
+// Trait modulation: the rolled `soothing` style determines which actions
+// soothe vs irritate. Player has to discover this through trial.
+//
+// match  → multiplier on the action's discomfort/connection deltas.
+// miss   → mild penalty so wrong action is visible (jumpier baby).
+const SOOTHING_AFFINITY: Record<BabyTraits["soothing"], Record<string, number>> = {
+  motion:   { rock: 1.8, hold: 1.4, shush: 0.8, sing: 0.7, feed: 1.0, check_diaper: 1.0 },
+  sound:    { sing: 1.8, shush: 1.4, rock: 0.8, hold: 0.9, feed: 1.0, check_diaper: 1.0 },
+  contact:  { hold: 1.8, rock: 1.3, sing: 0.9, shush: 0.7, feed: 1.1, check_diaper: 1.0 },
+  silence:  { shush: 1.8, hold: 1.1, sing: 0.5, rock: 0.7, feed: 1.0, check_diaper: 1.0 },
+};
+
+function affinityFor(action: string, traits: BabyTraits): number {
+  const tab = SOOTHING_AFFINITY[traits.soothing];
+  return tab?.[action] ?? 1.0;
+}
+
+// Track which actions have produced a strong response so the debrief card
+// can show what the player figured out about the baby.
+function rememberTrait(
+  discovered: string[],
+  action: string,
+  traits: BabyTraits,
+): string[] {
+  const aff = affinityFor(action, traits);
+  if (aff <= 1.2) return discovered;
+  const tag = `soothing:${traits.soothing}`;
+  if (discovered.includes(tag)) return discovered;
+  return [...discovered, tag];
+}
+
+function modulate(
+  delta: Partial<Omit<BabyNeeds, "mood">>,
+  action: string,
+  traits: BabyTraits,
+): Partial<Omit<BabyNeeds, "mood">> {
+  const aff = affinityFor(action, traits);
+  if (aff === 1.0) return delta;
+  return {
+    hunger: delta.hunger != null && delta.hunger < 0 ? delta.hunger * aff : delta.hunger,
+    sleepiness: delta.sleepiness,
+    discomfort: delta.discomfort != null && delta.discomfort < 0 ? delta.discomfort * aff : delta.discomfort,
+    connection: delta.connection != null && delta.connection > 0 ? delta.connection * aff : delta.connection,
+    health: delta.health,
+  };
 }
 
 function applyLedgerDelta(
@@ -92,66 +139,65 @@ export function reducer(state: GameState, event: GameEvent): GameState {
       }
 
       case "feed": {
-        const nextNeeds = applyNeedsDelta(state.baby.needs, {
-          hunger: -25,
-          connection: 5,
-        });
+        const nextNeeds = applyNeedsDelta(
+          state.baby.needs,
+          modulate({ hunger: -25, connection: 5 }, "feed", state.baby.traits),
+        );
         return {
           ...state,
-          baby: { ...state.baby, needs: nextNeeds },
+          baby: { ...state.baby, needs: nextNeeds, discoveredTraits: rememberTrait(state.baby.discoveredTraits, "feed", state.baby.traits) },
           ledger: applyLedgerDelta(state.ledger, { playerSoothes: 1 }),
           eventLog: appendedLog,
         };
       }
 
       case "rock": {
-        const nextNeeds = applyNeedsDelta(state.baby.needs, {
-          discomfort: -8,
-          connection: 6,
-          sleepiness: 3,
-        });
+        const nextNeeds = applyNeedsDelta(
+          state.baby.needs,
+          modulate({ discomfort: -8, connection: 6, sleepiness: 3 }, "rock", state.baby.traits),
+        );
         return {
           ...state,
-          baby: { ...state.baby, needs: nextNeeds },
+          baby: { ...state.baby, needs: nextNeeds, discoveredTraits: rememberTrait(state.baby.discoveredTraits, "rock", state.baby.traits) },
           ledger: applyLedgerDelta(state.ledger, { playerSoothes: 1 }),
           eventLog: appendedLog,
         };
       }
 
       case "sing": {
-        const nextNeeds = applyNeedsDelta(state.baby.needs, {
-          connection: 10,
-          discomfort: -5,
-        });
+        const nextNeeds = applyNeedsDelta(
+          state.baby.needs,
+          modulate({ connection: 10, discomfort: -5 }, "sing", state.baby.traits),
+        );
         return {
           ...state,
-          baby: { ...state.baby, needs: nextNeeds },
+          baby: { ...state.baby, needs: nextNeeds, discoveredTraits: rememberTrait(state.baby.discoveredTraits, "sing", state.baby.traits) },
           ledger: applyLedgerDelta(state.ledger, { playerSoothes: 1 }),
           eventLog: appendedLog,
         };
       }
 
       case "shush": {
-        const nextNeeds = applyNeedsDelta(state.baby.needs, {
-          discomfort: -6,
-          connection: 3,
-        });
+        const nextNeeds = applyNeedsDelta(
+          state.baby.needs,
+          modulate({ discomfort: -6, connection: 3 }, "shush", state.baby.traits),
+        );
         return {
           ...state,
-          baby: { ...state.baby, needs: nextNeeds },
+          baby: { ...state.baby, needs: nextNeeds, discoveredTraits: rememberTrait(state.baby.discoveredTraits, "shush", state.baby.traits) },
           ledger: applyLedgerDelta(state.ledger, { playerSoothes: 1 }),
           eventLog: appendedLog,
         };
       }
 
       case "hold": {
-        const nextNeeds = applyNeedsDelta(state.baby.needs, {
-          connection: 15,
-          discomfort: -5,
-        });
+        const nextNeeds = applyNeedsDelta(
+          state.baby.needs,
+          modulate({ connection: 15, discomfort: -5 }, "hold", state.baby.traits),
+        );
         return {
           ...state,
-          baby: { ...state.baby, needs: nextNeeds },
+          baby: { ...state.baby, needs: nextNeeds, discoveredTraits: rememberTrait(state.baby.discoveredTraits, "hold", state.baby.traits) },
           ledger: applyLedgerDelta(state.ledger, { playerSoothes: 1 }),
           eventLog: appendedLog,
         };
@@ -246,6 +292,53 @@ export function reducer(state: GameState, event: GameEvent): GameState {
       };
     }
     return { ...state, eventLog: appendedLog };
+  }
+
+  // ── Agent-consultative events ──────────────────────────────────────────────
+  // These originate from the Baby LLM agent (gpt-5.5 tool calls, routed
+  // through Game.tsx → transport → runtime.dispatchAgentEvent → here).
+  // They are ADVISORY: the reducer applies them but clamps all values so the
+  // deterministic model remains authoritative.
+
+  if (event.type === "AGENT_VISUAL_STATE") {
+    const vs = event.payload?.visualState as import("@contracts/game-state").BabyVisualState | undefined;
+    if (!vs) return { ...state, eventLog: appendedLog };
+    return {
+      ...state,
+      baby: { ...state.baby, visualState: vs },
+      eventLog: appendedLog,
+    };
+  }
+
+  if (event.type === "AGENT_NEED_DELTA") {
+    const need = event.payload?.need as keyof Omit<import("@contracts/game-state").BabyNeeds, "mood"> | "mood" | undefined;
+    const delta = event.payload?.delta as number | undefined;
+    if (!need || delta == null) return { ...state, eventLog: appendedLog };
+
+    if (need === "mood") {
+      // mood is derived — bump the raw needs proportionally so deriveMood stays consistent.
+      // We apply a small connection bump as a proxy for mood improvement/decline.
+      const connectionProxy = delta * 0.5;
+      const next = applyNeedsDelta(state.baby.needs, { connection: connectionProxy });
+      return {
+        ...state,
+        baby: { ...state.baby, needs: next },
+        eventLog: appendedLog,
+      };
+    }
+
+    const validNeeds = ["hunger", "sleepiness", "discomfort", "connection", "health"] as const;
+    if (!validNeeds.includes(need as (typeof validNeeds)[number])) {
+      return { ...state, eventLog: appendedLog };
+    }
+    const next = applyNeedsDelta(state.baby.needs, {
+      [need]: delta,
+    } as Partial<Omit<import("@contracts/game-state").BabyNeeds, "mood">>);
+    return {
+      ...state,
+      baby: { ...state.baby, needs: next },
+      eventLog: appendedLog,
+    };
   }
 
   if (event.type === "STATE_CHANGED") {

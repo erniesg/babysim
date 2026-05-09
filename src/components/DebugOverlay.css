@@ -1,0 +1,205 @@
+.debug-overlay {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 380px;
+  max-width: 90vw;
+  max-height: 70vh;
+  z-index: 100;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  background: rgba(8, 6, 6, 0.92);
+  border: 1px solid rgba(245, 220, 140, 0.32);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.debug-overlay.collapsed {
+  width: auto;
+  max-height: none;
+}
+
+.debug-toggle {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  background: rgba(245, 220, 140, 0.1);
+  border: none;
+  border-bottom: 1px solid rgba(245, 220, 140, 0.22);
+  color: rgba(245, 220, 140, 0.95);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.debug-toggle:hover {
+  background: rgba(245, 220, 140, 0.18);
+}
+
+.debug-overlay.collapsed .debug-toggle {
+  border-bottom: none;
+}
+
+.debug-section {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  overflow-y: auto;
+}
+
+.debug-section:last-of-type {
+  border-bottom: none;
+}
+
+.debug-section-title {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: rgba(245, 220, 140, 0.7);
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.debug-state-line {
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.debug-state-line strong {
+  color: rgba(245, 220, 140, 0.95);
+  font-weight: 700;
+}
+
+.debug-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+
+.debug-empty {
+  color: rgba(255, 255, 255, 0.32);
+  font-style: italic;
+  font-size: 10.5px;
+}
+
+.debug-entry {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  flex-wrap: wrap;
+}
+
+.debug-entry:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.debug-time {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 9.5px;
+  flex-shrink: 0;
+}
+
+.debug-agent-name {
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.04em;
+}
+
+.debug-agent-status {
+  text-transform: uppercase;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.debug-called .debug-agent-status {
+  background: rgba(120, 140, 200, 0.18);
+  color: rgba(180, 200, 255, 0.95);
+}
+
+.debug-ok .debug-agent-status {
+  background: rgba(108, 174, 117, 0.18);
+  color: rgba(180, 230, 188, 0.95);
+}
+
+.debug-fallback .debug-agent-status {
+  background: rgba(245, 220, 140, 0.18);
+  color: rgba(245, 220, 140, 0.95);
+}
+
+.debug-error .debug-agent-status {
+  background: rgba(238, 108, 77, 0.22);
+  color: rgba(255, 180, 160, 0.95);
+}
+
+.debug-agent-tools {
+  color: rgba(108, 174, 117, 0.95);
+  font-style: italic;
+  font-size: 10px;
+}
+
+.debug-agent-detail {
+  color: rgba(255, 180, 160, 0.85);
+  font-size: 10px;
+  word-break: break-word;
+  flex: 1 1 100%;
+}
+
+.debug-rps-phase {
+  font-weight: 700;
+  color: rgba(245, 220, 140, 0.85);
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+
+.debug-rps-hand {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.debug-rps-hand.ok {
+  background: rgba(108, 174, 117, 0.18);
+  color: rgba(180, 230, 188, 0.95);
+}
+
+.debug-rps-hand.off {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.debug-rps-gesture {
+  font-style: italic;
+  color: rgba(180, 200, 255, 0.95);
+}
+
+.debug-rps-count {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+}
+
+.debug-rps-msg {
+  color: rgba(255, 255, 255, 0.7);
+  flex: 1 1 100%;
+  font-size: 10px;
+}

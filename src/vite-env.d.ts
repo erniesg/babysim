@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   readonly VITE_LIVE_BABY_SFX?: string;
   readonly VITE_LIVE_OFFICER_AVATAR?: string;
   readonly VITE_LIVE_BABY_PORTRAIT?: string;
+  /** Set to "1" to enable live Gemini text partner lines outside argument beats. Off by default. */
+  readonly VITE_PARTNER_LIVE_TEXT?: string;
 }
 
 interface ImportMeta {

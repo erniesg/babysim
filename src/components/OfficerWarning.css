@@ -1,0 +1,56 @@
+.officer-warning {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  max-width: 320px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--gold);
+  background: linear-gradient(160deg, rgba(74, 36, 24, 0.92) 0%, rgba(26, 14, 12, 0.96) 100%);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(245, 220, 140, 0.18);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.officer-warning.shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.officer-warning.hiding {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.officer-warning-tag {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.officer-warning-text {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.45;
+}
+
+@media (max-width: 640px) {
+  .officer-warning {
+    top: 72px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
+}

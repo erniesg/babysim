@@ -1,7 +1,7 @@
 import * as THREE from "three";
 
 export type MuppetExpression = "strict" | "warm" | "skeptical" | "delighted";
-export type MuppetGesture = "stamp" | "lean" | "nod" | "wave" | "none";
+export type MuppetGesture = "stamp" | "lean" | "nod" | "wave" | "point" | "none";
 
 export type MuppetSayOptions = {
   text: string;
@@ -223,6 +223,7 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   let fallbackSpeechTimer: ReturnType<typeof setTimeout> | null = null;
   let fallbackAudioContext: AudioContext | null = null;
   let activeSayResolver: (() => void) | null = null;
+  let activeRemoteAudio: HTMLAudioElement | null = null;
   let voicePrefs: VoicePrefs = VOICE_PROFILES.Ernest;
   let currentCharacter: MuppetCharacter = "Ernest";
 
@@ -378,12 +379,82 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   const rightShoulder = makeArm(1);
   root.add(leftShoulder, rightShoulder);
 
+  // Officer badge — gold square on the chest. We cycle provider logos through
+  // the badge's material map so the muppet doubles as a "powered by" credit.
+  // Logos load async; until they arrive the badge is plain gold.
+  const badgeMat = new THREE.MeshStandardMaterial({ color: 0xe8c17a, roughness: 0.32, metalness: 0.18 });
   const badge = new THREE.Mesh(
-    new THREE.BoxGeometry(0.32, 0.24, 0.04),
-    new THREE.MeshStandardMaterial({ color: 0xd5a84e, roughness: 0.35 }),
+    new THREE.BoxGeometry(0.42, 0.42, 0.04),  // slightly bigger + square for the logo
+    badgeMat,
   );
-  badge.position.set(-0.36, -1.08, 0.78);
+  badge.position.set(-0.36, -1.04, 0.78);
   root.add(badge);
+
+  // ── Logo cycle on the badge ───────────────────────────────────────────────
+  const BADGE_LOGOS = [
+    "/img/logos/openai.svg",
+    "/img/logos/codex.svg",
+    "/img/logos/cloudflare.svg",
+    "/img/logos/google.svg",
+    "/img/logos/gemini.svg",
+    "/img/logos/elevenlabs.svg",
+  ];
+
+  // Each logo is loaded into a 256×256 canvas with a warm-cream background so
+  // the transparent SVG fills don't disappear on the gold badge surface.
+  function logoToTexture(url: string): Promise<THREE.CanvasTexture | null> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        // Warm cream background — readable on the gold badge.
+        ctx.fillStyle = "#f5e8c4";
+        ctx.fillRect(0, 0, 256, 256);
+        // Center logo at ~70% of the canvas with letterbox aspect preservation.
+        const PAD = 32;
+        const max = 256 - PAD * 2;
+        const ratio = (img.naturalWidth || 1) / (img.naturalHeight || 1);
+        let w = max, h = max;
+        if (ratio > 1) h = max / ratio;
+        else           w = max * ratio;
+        ctx.drawImage(img, (256 - w) / 2, (256 - h) / 2, w, h);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 4;
+        resolve(tex);
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  let badgeIntervalId: ReturnType<typeof setInterval> | null = null;
+  const badgeTextures: THREE.CanvasTexture[] = [];
+
+  void Promise.all(BADGE_LOGOS.map(logoToTexture)).then((maybeTextures) => {
+    for (const t of maybeTextures) {
+      if (t) badgeTextures.push(t);
+    }
+    if (badgeTextures.length === 0) return;
+
+    let idx = 0;
+    badgeMat.map = badgeTextures[0];
+    badgeMat.needsUpdate = true;
+
+    badgeIntervalId = setInterval(() => {
+      idx = (idx + 1) % badgeTextures.length;
+      badgeMat.map = badgeTextures[idx];
+      badgeMat.needsUpdate = true;
+    }, 4500);
+  });
 
   /**
    * Apply per-character visual differentiation: head color, eye prominence,
@@ -535,6 +606,11 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
     }
     if (state.gesture === "nod") {
       headGroup.rotation.x += Math.sin(t * Math.PI * 5) * 0.18 * env;
+    }
+    if (state.gesture === "point") {
+      // Right arm extends forward and slightly up — accusatory point toward the player.
+      rightShoulder.rotation.z -= 0.6 * env;
+      rightShoulder.rotation.x -= 0.55 * env;
     }
     if (done) {
       state.gesture = null;
@@ -779,6 +855,14 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
         prev();
       }
       stopSpeech();
+      // Halt any in-flight remote audio from a prior say() — otherwise the
+      // previous Audio element keeps playing in parallel with the new one,
+      // producing the "two voices at once" symptom.
+      if (activeRemoteAudio) {
+        try { activeRemoteAudio.pause(); } catch { /* noop */ }
+        activeRemoteAudio.src = "";
+        activeRemoteAudio = null;
+      }
       activeSayResolver = resolve;
 
       // Pre-rendered audio takes precedence: play it through HTMLAudioElement,
@@ -795,8 +879,6 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
       speakWithBrowserVoice(text, 0, token, resolve);
     });
   }
-
-  let activeRemoteAudio: HTMLAudioElement | null = null;
 
   function playRemoteAudio(url: string, token: number, resolve: () => void) {
     if (token !== speechToken) {
@@ -843,6 +925,12 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
     window.removeEventListener("pointermove", onPointerMove);
     sizeObserver.disconnect();
     panicStop();
+    if (badgeIntervalId !== null) {
+      clearInterval(badgeIntervalId);
+      badgeIntervalId = null;
+    }
+    for (const t of badgeTextures) t.dispose();
+    badgeTextures.length = 0;
     renderer.dispose();
     scene.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {

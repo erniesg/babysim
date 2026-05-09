@@ -1,0 +1,85 @@
+.time-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(10, 5, 4, 0.55);
+  border: 1px solid #2a1d18;
+  border-radius: 12px;
+  transition: background 0.5s ease, border-color 0.5s ease;
+}
+
+.time-bar.night {
+  background: linear-gradient(160deg, #11142b 0%, #0a0a14 100%);
+  border-color: #2a2540;
+}
+
+.time-bar.day {
+  background: linear-gradient(160deg, #2a1410 0%, #1a0e0c 100%);
+  border-color: #2a1d18;
+}
+
+.time-bar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(245, 220, 140, 0.85);
+}
+
+.time-bar-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.time-bar-label {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.time-bar-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.time-bar-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    #4a3a8a 0%,    /* deep night */
+    #ffd39b 28%,   /* dawn / morning */
+    #ffd39b 60%,   /* midday */
+    #ee6c4d 76%,   /* evening */
+    #4a3a8a 100%   /* night again */
+  );
+  transition: width 0.6s linear;
+  border-radius: 999px;
+}
+
+.time-bar-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  background: rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
+.time-bar-marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+  transition: left 0.6s linear;
+}

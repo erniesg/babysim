@@ -18,19 +18,19 @@ Hidden baby traits. A tired partner. A fairness ledger between parents. A verdic
 
 | t | beat | what happens |
 |---|---|---|
-| 0s | home | New game / Join room |
+| 0s | home | New game / Join room (room = stub today) |
 | 3s | probation splash | "Welcome to Probation" overlay |
-| 5s | officer intro (muppet) | gpt-5.5 generates an in-character line referencing your seeded officer; muppet speaks it; pause; finger snap; pause; Lyria probation theme kicks in |
+| 5s | officer intro (muppet) | gpt-5.5 generates an in-character line referencing your seeded officer (Ernest / Bern / Crumb, each with a distinct voice profile); muppet speaks it via ElevenLabs; pause; finger snap; pause; Lyria probation theme kicks in |
 | 12s | photo intake | Webcam capture / file upload / skip; partner photo or system-match |
-| 18s | verification + generation | Bureaucratic intake questions (planned: rock-paper-scissors via hand-tracking, "parenting requires fast reflexes") while a progress bar fakes "compositing puppet rig / synthesizing cry pack / generating partner profile" |
+| 18s | verification + generation | Rock-paper-scissors via continuous MediaPipe `HandLandmarker` (1.5 s majority-vote sampling, landmark overlay) while a progress bar runs |
 | 32s | ominous warning | Officer reminds you the ledger is recorded |
-| 38s | baby roll + naming | Seeded baby (gender, soothing trait, feeding pattern, sleep type, temperament); player names the baby; partner reacts in character |
+| 38s | baby roll + naming + Adopt-or-Generate | Seeded baby (gender, soothing trait, feeding pattern, sleep type, temperament); player names the baby; **Adopt** loads the canonical 2.5D rig at `/puppets/baby/`; **Generate** kicks off live `gpt-image-2` via `/api/baby/portrait`. Partner reacts in character. |
 | 45s | first cry → soothe discovery | Player tries `feed`/`rock`/`sing`/`shush`/`hold` — only the action matching the hidden `soothing` trait calms the baby. **Sing** opens a 3.5s mic capture with Web Audio analysis (volume + rhythm) |
 | 60s | time jump → night cry | Screen darkens; partner shown asleep |
 | 65s | wake / shirk / wake-partner | Choice updates the fairness ledger live |
 | 75s | argument scene | Partner avatar enlarges; **realtime voice session** opens (Gemini Flash Live default; OpenAI Realtime swappable); partner can call `take_night_shift` / `refuse_night_shift` / `concede_argument` / `raise_resentment` tools that mutate the game state |
 | 85s | get up + soothe | Cry resolves |
-| 90s | "She smiled at you" cute moment | 3.4s CSS payoff animation today; Veo-3.1 video planned |
+| 90s | "She smiled at you" cute moment | CSS payoff animation today; Veo-3.1 video via `/api/cute-payoff/video` (LRO) wired and live |
 | 95s | muppet verdict | gpt-5.5 reads your ledger and renders a verdict that quotes specific numbers |
 | 105s | gacha debrief card | Player archetype (Night Shifter / Co-Pilot / Strategic Sleeper / Overfunctioner / Mixed Performer); baby traits revealed; replay |
 
@@ -64,31 +64,36 @@ Copy `.env.example` to `.env` and fill keys you actually need. The deterministic
 ## Architecture
 
 ```
-                                   ┌──────────────────────────────────┐
-                                   │     Cloudflare Worker (V8)       │
-                                   │   src/worker/index.ts            │
-   ┌─────────────────┐             │                                  │
-   │  Browser SPA    │             │   Static-asset binding (ASSETS)  │
-   │  Vite + React   │ <─── GET /  │     serves dist/ as the SPA      │
-   │  Three.js       │             │                                  │
-   │                 │             │   /api/healthz                   │
-   │  Engine:        │ <─── /api ─>│   /api/officer    → gpt-5.5      │
-   │   reducer       │             │   /api/officer/say → ElevenLabs  │
-   │   runtime       │             │   /api/realtime/gemini/token     │
-   │   beat graph    │             │   /api/realtime/openai/token     │
-   │                 │             │                                  │
-   │  Muppet (3D)    │             │   Secrets: OPENAI / GEMINI /     │
-   │  AudioDirector  │             │            GOOGLE / ELEVENLABS / │
-   │  RealtimePartner│             │            ANTHROPIC             │
-   └─────────────────┘             └────┬───────────┬──────────┬──────┘
+                                   ┌────────────────────────────────────┐
+                                   │     Cloudflare Worker (V8)         │
+                                   │   src/worker/index.ts              │
+   ┌─────────────────┐             │                                    │
+   │  Browser SPA    │             │   Static-asset binding (ASSETS)    │
+   │  Vite + React   │ <─── GET /  │     serves dist/ as the SPA        │
+   │  Three.js       │             │                                    │
+   │                 │             │   /api/healthz                     │
+   │  Engine:        │ <─── /api ─>│   /api/officer    → gpt-5.5 (7 tools) │
+   │   reducer       │             │   /api/baby      → gpt-5.5 (7 tools) │
+   │   runtime       │             │   /api/gm        → gpt-5.5         │
+   │   beat graph    │             │   /api/partner/line → gemini-3.1-flash-lite │
+   │                 │             │   /api/officer/say  → ElevenLabs   │
+   │  Muppet (3D)    │             │   /api/baby/sfx     → ElevenLabs   │
+   │  PuppetCanvas   │             │   /api/baby/portrait → Replicate gpt-image-2 │
+   │  AudioDirector  │             │   /api/officer/avatar → Replicate gpt-image-2 │
+   │  RealtimePartner│             │   /api/music/probation-theme → Lyria-002 │
+   │  DebugOverlay   │             │   /api/cute-payoff/video → Veo-3.1 (LRO) │
+   │                 │             │   /api/cinematic       → Replicate / fal │
+   │                 │             │   /api/realtime/{gemini,openai}/token │
+   └─────────────────┘             └────┬───────────┬──────────┬────────┘
         │                               │           │          │
         │ WebSocket / WebRTC            │           │          │
-        │  (mic + audio streaming)      │           │          │
+        │  (mic + audio streaming;      │           │          │
+        │   arguments only)             │           │          │
         ▼                               ▼           ▼          ▼
   ┌──────────────┐                ┌─────────┐  ┌────────┐ ┌──────────┐
   │ Gemini Flash │                │ OpenAI  │  │ Gemini │ │ElevenLabs│
-  │ Live (3.1)   │                │ gpt-5.5 │  │  Live  │ │   TTS    │
-  │  realtime    │                │ + tools │  │  3.1   │ │ + SFX    │
+  │ Live (3.1)   │                │ gpt-5.5 │  │  Flash │ │   TTS    │
+  │  realtime    │                │ + tools │  │  Lite  │ │ + SFX    │
   └──────────────┘                └─────────┘  └────────┘ └──────────┘
 ```
 
@@ -103,31 +108,37 @@ The `DirectorCommand` schema (`contracts/director-commands.ts`) IS a tool-call s
 
 | Layer | Stack |
 |---|---|
-| Edge | Cloudflare Workers (V8 isolates, Static Assets binding) |
-| Frontend | Vite 5 + React 18 + TypeScript 5 (no Next.js) |
-| 3D officer | Three.js (custom muppet rig: expression, gesture, mouth-sync) |
-| Audio | Web Audio API (mic capture + analysis + queue), SpeechSynthesis (per-officer voice profile) |
-| Officer agent | OpenAI gpt-5.5 (function calling); ElevenLabs TTS as voice tool |
-| Realtime partner | Gemini 3.1 Flash Live Preview (default); OpenAI gpt-realtime (swap) |
-| Music | Lyria-002 (pre-generated 32s probation theme) |
-| Cry pack | Gemini 3.1 Flash TTS (Charon / Puck / Kore voices speaking onomatopoeia); ElevenLabs `text_to_sound_v2` as fallback |
-| Officer + partner avatars | Gemini 3 Pro Image (1024×1024, cinematic 1970s state-drama style) |
+| Edge | Cloudflare Workers (V8 isolates, Static Assets binding); no Durable Object yet |
+| Frontend | Vite + React 18 + TypeScript 5 (no Next.js) |
+| 3D officer | Three.js custom muppet rig (expression, gesture, mouth-sync, badge logo cycle) |
+| 2.5D baby | Layered-PNG `PuppetCanvas` rig at `public/puppets/baby/` (1 canonical rig + 14 layer PNGs); vignette + cross-fade + per-state idle motion |
+| Audio | Web Audio API (mic capture + analysis + queue); ElevenLabs TTS for officer voice; `SpeechSynthesis` fallback |
+| Officer agent | OpenAI `gpt-5.5` (chat completions tool calling; 7 tools); per-character voice profiles (Ernest / Bern / Crumb) |
+| Baby agent | OpenAI `gpt-5.5` (7 consultative tools + `trigger_fallback`); reducer clamps deltas via `dispatchAgentEvent` |
+| Partner per-beat text | Gemini `gemini-3.1-flash-lite` with `say_line` function-calling |
+| Realtime partner mic (arguments only) | Gemini Flash Live Preview (default); OpenAI `gpt-realtime` swap via `VITE_REALTIME_PARTNER_PROVIDER=openai` |
+| Music | Lyria-002 via Vertex AI (default ON); pre-baked `public/audio/music/probation-theme.mp3` fallback |
+| Cry pack | Real recordings from the donateacry public dataset, 4 categories (`hunger`, `tired`, `discomfort`, `coo`); ElevenLabs `text_to_sound_v2` is the live alternative |
+| Officer + baby portraits | Replicate `openai/gpt-image-2`; fal.ai `flux-pro` selectable for the baby path |
+| Cinematic | Replicate `seedance` / `veo` and fal `kling-v3-pro` (cute_payoff uses Veo-3.1 LRO; pass `provider: "veo"` for any baby cinematic) |
 | State / RNG | mulberry32 seeded from a string; same seed always produces the same baby/partner/officer roll |
-| Testing | vitest (76 engine tests, all green) |
+| Testing | vitest (152 engine tests, all green) |
 
 ## Agents
 
-Three modes, all swappable behind one interface:
+Three live LLM agents share the stage today, all swappable via env flags:
 
-| Mode | Officer voice | Officer text | Partner voice |
+| Agent | Where | Default model | Tool surface |
 |---|---|---|---|
-| **A: Gemini Flash** | Gemini Flash Live native audio | Gemini Flash Live | Gemini Flash Live |
-| **B: OpenAI Realtime** | gpt-realtime native audio | gpt-realtime | gpt-realtime |
-| **C: gpt-5.5 + tools** *(default today)* | ElevenLabs TTS via tool call | gpt-5.5 with `say()` + `elevenlabs_tts()` tools | Gemini Flash Live (or OpenAI Realtime) |
+| Officer | `/api/officer` | OpenAI `gpt-5.5` | `say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input` |
+| Baby | `/api/baby` | OpenAI `gpt-5.5` | `play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action` (+ `trigger_fallback`) |
+| Partner per-beat text | `/api/partner/line` | Gemini `gemini-3.1-flash-lite` | `say_line` |
+| Partner realtime mic (arguments only) | browser → Gemini Live | `gemini-3.1-flash-live-preview` | `take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment` |
+| GM (Director) | `/api/gm` | OpenAI `gpt-5.5` | full `DirectorCommand[]`; `enter_beat` server-side validated against `BEAT_GRAPH` |
 
-Mode C is the default because it gives the most flexibility — the same gpt-5.5 agent can also call SFX generation, music generation, image-asset generation tools without swapping providers. The realtime modes are visible-on-stage features for the partner argument scene.
+Officer voice defaults to ElevenLabs TTS via `/api/officer/say` (browser `SpeechSynthesis` is the fallback). The reducer remains authoritative — agent tool calls are CONSULTATIVE and dispatched through `dispatchAgentEvent`. The handlers are minimal hand-rolled implementations; the published Cloudflare Agents SDK package and Durable Objects are not yet in use.
 
-Per-agent tool allow-list, system prompts, wiring map: see [`docs/agents.md`](docs/agents.md).
+Per-agent tool allow-list, system prompts, wiring map: see [`docs/agents.md`](docs/agents.md). Current state + gotchas: see [`docs/HANDOFF.md`](docs/HANDOFF.md).
 
 ## Repo layout
 
@@ -170,10 +181,10 @@ babysim/
 
 ## Development workflow
 
-- **TDD-first for the engine**: `npm test` runs 76 tests covering seed reproducibility, reducer validation, baby tick math, cry-trigger selection, action effectiveness across all soothing archetypes, partner reactions, runtime beat transitions, ledger accumulation, and panic recovery.
+- **TDD-first for the engine**: `npx vitest run` runs 152 tests covering seed reproducibility, reducer validation, baby tick math, cry-trigger selection, action effectiveness across all soothing archetypes, partner reactions, runtime beat transitions, ledger accumulation, and panic recovery.
 - **Two dev modes**: `npm run dev` (Vite-only, fast HMR, no `/api/*`) for frontend iteration; `npm run dev:worker` (full stack at port 8787) when touching Worker handlers.
 - **Live debug**: every Worker request gets a UUID logged on entry + on every upstream fetch (status + body head). Browser console `[GeminiLive]`, `[Muppet]` lines correlate with Worker `[officer <uuid>]`. `npm run tail` streams the production Worker.
-- **Debug overlay**: append `?debug=1` to the URL to see the current beat/phase indicator.
+- **Debug overlay**: append `?debug=1` to the URL to see the current beat / phase indicator and live agent tool calls (officer / baby) plus RPS sampling state.
 
 ## Deploy
 
@@ -209,14 +220,19 @@ See [`AGENTS.md`](AGENTS.md) for the full non-negotiables list.
 
 ## Roadmap
 
-- [ ] **Officer voice via ElevenLabs tool call** — gpt-5.5 emits `elevenlabs_tts(text, voice_id)` alongside `say(text, expression, gesture)`; muppet plays the returned audio URL
-- [ ] **Verification rock-paper-scissors** — webcam hand-tracking via MediaPipe Tasks Vision, in-character "parenting requires fast reflexes" framing, GM-orchestrated gate
-- [ ] **Baby agent** — gpt-5.5 with `play_audio` (baby channel only) + `set_caption` for trait-discovery hints
-- [ ] **GM agent** — gpt-5.5 emits `DirectorCommand[]` per beat; reducer validates against `BEAT_GRAPH`
-- [ ] **Multiplayer via Durable Object** — `GameSessionDO` holds shared state; partner can be a real second player
-- [ ] **Veo-3.1 cute payoff video** — pre-gen pipeline already exists for music + images
-- [ ] **Pre-recorded muppet verdict MP3** — Gemini Flash voice TTS at game start, played at verdict
-- [ ] **Cloudflare Agents SDK migration** — when GA, replace the `/api/officer` Worker handler with an Agents SDK agent
+- [x] **Officer voice via ElevenLabs** — `/api/officer/say` plays the returned audio through the muppet
+- [x] **Verification rock-paper-scissors** — webcam hand-tracking via MediaPipe `HandLandmarker` with landmark overlay + 1.5 s majority-vote sampling
+- [x] **Baby agent** — gpt-5.5 with 7 consultative tools (`play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`) + `trigger_fallback`; deltas clamped via reducer's `dispatchAgentEvent`
+- [x] **GM agent** — gpt-5.5 emits `DirectorCommand[]` per beat; server-side `BEAT_GRAPH` validation
+- [x] **Partner per-beat text agent** — Gemini Flash Lite at `/api/partner/line` (`say_line`); behind `VITE_PARTNER_LIVE_TEXT=1`
+- [x] **Veo-3.1 cute payoff video** — `/api/cute-payoff/video` (initiate + poll LRO)
+- [x] **Replicate `gpt-image-2` baby + officer portraits** — `/api/baby/portrait`, `/api/officer/avatar`
+- [x] **Adopt-or-Generate at baby_roll** — pick canonical rig OR live `gpt-image-2`
+- [ ] **Adopt rig pool > 1** — clone `/puppets/baby/` into trait-themed sibling dirs and append to the chooser
+- [ ] **Generate path → full 14-layer rig** — port the landmark + segmentation pipeline server-side; today Generate yields a flat portrait
+- [ ] **Multiplayer via Durable Object** — `GameSessionDO` holds shared state; partner becomes a real second player. "Join a Room" is a stub today
+- [ ] **Pre-recorded muppet verdict MP3** — TTS at game start, played at verdict
+- [ ] **Cloudflare Agents SDK migration** — replace the hand-rolled handlers when there's a reason to
 
 ## Credits
 

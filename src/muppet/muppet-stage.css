@@ -9,6 +9,15 @@
   border: 1px solid #2a1d18;
 }
 
+/* Compact mode for verification beats — officer stays on stage above the
+ * challenge UI without dominating the layout. Instant change (no transition)
+ * to avoid mid-resize WebGL frames showing only a thin strip of the muppet. */
+.muppet-stage.compact {
+  aspect-ratio: 16 / 6;
+  min-height: 180px;
+  max-height: 240px;
+}
+
 .muppet-canvas {
   position: absolute;
   inset: 0;

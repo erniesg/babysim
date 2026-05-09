@@ -1,8 +1,33 @@
 # Tool-Calling Agents And Realtime Voice
 
-This is a hackathon-scope integration plan for layering tool-calling LLM agents
-(Officer / Baby / Partner / GM) onto the deterministic BabySim demo, plus a
-Realtime voice path for the Partner during the night argument.
+This was the original hackathon-scope integration plan for layering tool-calling
+LLM agents (Officer / Baby / Partner / GM) onto the deterministic BabySim demo,
+plus a Realtime voice path for the Partner during the night argument.
+
+> **Status (current):** Officer / Baby / Partner / GM are all wired and live.
+> The shipped tool surfaces are wider than the original sketch below — see
+> `docs/agents.md` and `docs/HANDOFF.md` for the canonical inventory:
+>
+> - Officer (`/api/officer`, `gpt-5.5`) — 7 tools: `say`, `set_expression`,
+>   `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`,
+>   `request_player_input`. Per-character voice profiles (Ernest, Bern,
+>   Crumb).
+> - Baby (`/api/baby`, `gpt-5.5`) — 7 consultative tools (`play_audio`,
+>   `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`,
+>   `request_attention`, `acknowledge_action`) plus `trigger_fallback`.
+>   Reducer is authoritative; `dispatchAgentEvent` clamps `set_visual_state`
+>   and `set_need_delta` deltas.
+> - Partner per-beat text (`/api/partner/line`, `gemini-3.1-flash-lite`) — 1
+>   tool: `say_line`. Lives in `src/worker/handlers/partner-line.ts`. Behind
+>   `VITE_PARTNER_LIVE_TEXT=1`.
+> - Partner realtime mic during arguments only (`gemini-3.1-flash-live-preview`,
+>   swap to `gpt-realtime` via `VITE_REALTIME_PARTNER_PROVIDER=openai`).
+> - GM (`/api/gm`, `gpt-5.5`) — full `DirectorCommand[]` surface;
+>   `enter_beat` is server-side validated against `BEAT_GRAPH`.
+>
+> The Worker handlers are minimal hand-rolled implementations, NOT the
+> published Cloudflare Agents SDK package. There is no Durable Object yet;
+> agent state lives in the browser via `LocalGameTransport`.
 
 The deterministic loop already ships every required beat. Live AI is purely
 opt-in: every agent below has a scripted fallback already in the codebase.
@@ -13,6 +38,10 @@ The big idea: **`DirectorCommand` is already a tool-call schema.** We do not
 need to invent an agent IR. We just need to publish the existing union as
 provider-formatted tool definitions, route validated calls through the existing
 reducer, and give each agent a narrow tool surface.
+
+The sketches that follow are the **original plan**; the shipped per-agent
+allow-lists are wider. Treat the rest of this document as the design rationale,
+not the canonical inventory.
 
 ---
 

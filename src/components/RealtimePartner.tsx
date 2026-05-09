@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { GameState } from "@contracts/game-state";
 import type { PartnerEvent, RealtimePartnerSession, PartnerToolCall } from "../realtime/types";
 import { createRealtimePartner, selectedProviderFromEnv } from "../realtime/factory";
+import { MicLevelMeter } from "./MicLevelMeter";
 import "./RealtimePartner.css";
 
 type Props = {
@@ -22,6 +23,8 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
   const playQueueTimeRef = useRef(0);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micProcessorRef = useRef<{ disconnect: () => void } | null>(null);
+  // MediaStream surfaced to the level meter — populated for both providers.
+  const [micStream, setMicStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +86,7 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
       micProcessorRef.current = null;
       micStreamRef.current?.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
+      setMicStream(null);
       session.close();
       audioCtxRef.current?.close().catch(() => {});
       audioCtxRef.current = null;
@@ -93,7 +97,19 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
 
   async function startMic(session: RealtimePartnerSession, audioCtx: AudioContext) {
     if (session.provider === "openai") {
-      // OpenAI uses WebRTC track; mic is added inside session.start().
+      // OpenAI uses WebRTC track. We still tap getUserMedia separately so the
+      // level meter has a stream — the WebRTC track and this stream both come
+      // from the same default mic input on the OS, so the meter accurately
+      // reflects what's being sent over the wire.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        micStreamRef.current = stream;
+        setMicStream(stream);
+      } catch {
+        // Mic blocked — meter just won't render bars.
+      }
       return;
     }
     try {
@@ -101,6 +117,7 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       micStreamRef.current = stream;
+      setMicStream(stream);
       const source = audioCtx.createMediaStreamSource(stream);
       const node = audioCtx.createScriptProcessor(2048, 1, 1);
       node.onaudioprocess = (e) => {
@@ -151,6 +168,16 @@ export function RealtimePartner({ state, beatId, onToolCall, onClose }: Props) {
         <span className="kicker">Live partner · {sessionRef.current?.provider ?? "gemini"} · {phase}</span>
         <button onClick={onClose} className="realtime-close">End live turn</button>
       </div>
+
+      {/* Mic-active indicator: pulsing red dot + live volume meter. */}
+      {phase === "live" && (
+        <div className="mic-indicator" role="status" aria-live="polite">
+          <span className="mic-dot" aria-hidden="true" />
+          <span className="mic-label">Listening…</span>
+          <MicLevelMeter stream={micStream} />
+        </div>
+      )}
+
       {phase === "connecting" && <p className="dim">Connecting to {state.partner.name}…</p>}
       {phase === "error" && (
         <div className="realtime-error">

@@ -109,19 +109,102 @@
 .rps-status.good { color: var(--good); }
 .rps-status.warn { color: var(--warn); }
 
+/* ── Webcam frame: video underneath, landmark canvas overlay, live readout chip ── */
+
+/* Webcam moves to a small floating corner overlay during RPS — muppet stays
+ * the primary visual on stage. Player still sees their hand and the landmark
+ * tracker without it dominating the layout. */
 .rps-webcam {
   display: flex;
-  justify-content: center;
+  justify-content: flex-end;
+  margin-top: -240px;          /* pull up so it floats over the muppet's top-right area */
+  margin-bottom: 12px;
+  padding-right: 4px;
+  pointer-events: none;
 }
 
-.rps-webcam video {
-  width: 120px;
-  height: 90px;
-  border-radius: 10px;
-  object-fit: cover;
-  border: 1px solid #2a1d18;
-  transform: scaleX(-1); /* mirror */
+.rps-webcam-frame {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1.5px solid rgba(245, 220, 140, 0.55);
   background: #0a0404;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(245, 220, 140, 0.25);
+  pointer-events: auto;
+}
+
+@media (max-width: 720px) {
+  .rps-webcam {
+    margin-top: 12px;
+    justify-content: center;
+  }
+}
+
+.rps-webcam-frame video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Mirrored so a right hand looks right; landmark overlay is mirrored to match. */
+  transform: scaleX(-1);
+}
+
+.rps-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Overlay coordinates are already flipped inside drawLandmarks(),
+   * so do NOT also flip with CSS — they'd cancel out. */
+}
+
+/* Live gesture readout chip — top-right of webcam frame. */
+.rps-live-readout {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(245, 220, 140, 0.5);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: opacity 0.2s ease, border-color 0.25s ease;
+  pointer-events: none;
+}
+
+.rps-live-readout.hidden {
+  opacity: 0.45;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.rps-live-readout.visible {
+  opacity: 1;
+}
+
+.rps-live-label {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(245, 220, 140, 0.92);
+  font-weight: 700;
+}
+
+.rps-live-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.rps-live-name {
+  font-size: 11px;
+  text-transform: lowercase;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.06em;
 }
 
 .rps-skip-note {

@@ -151,7 +151,7 @@ export function BabyVisual({ visualState, name, mood }: Props) {
       */}
       {puppetAvailable === true ? (
         /* ── Tier 1: 2.5D layered puppet rig ───────────────────────────── */
-        <div style={{ position: "absolute", inset: 0 }}>
+        <div className="baby-stage">
           <PuppetCanvas
             visualState={visualState}
             manifestUrl={PUPPET_MANIFEST_URL}
@@ -160,7 +160,7 @@ export function BabyVisual({ visualState, name, mood }: Props) {
         </div>
       ) : puppetAvailable === false ? (
         /* ── Tier 2: video transition + idle loop ───────────────────────── */
-        <>
+        <div className="baby-stage">
           {/*
             Single <video> element — src is swapped by the effect above.
             Initially hidden; shown only when a video clip successfully loads.
@@ -176,10 +176,12 @@ export function BabyVisual({ visualState, name, mood }: Props) {
           />
           {/* Tier 3: PNG fallback — always rendered; hidden when video is active. */}
           <img ref={imgRef} src={view.url} alt="" className="baby-photo" />
-        </>
+        </div>
       ) : (
         /* ── Probing (undefined): render PNG so layout is never empty ───── */
-        <img src={view.url} alt="" className="baby-photo" />
+        <div className="baby-stage">
+          <img src={view.url} alt="" className="baby-photo" />
+        </div>
       )}
       <div className="baby-meta">
         <span className="baby-name">{name || "your baby"}</span>

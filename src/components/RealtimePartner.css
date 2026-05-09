@@ -53,3 +53,45 @@
   max-height: 220px;
   overflow-y: auto;
 }
+
+/* ── Mic-hot indicator: pulsing dot + label + frequency-bar meter ──────── */
+
+.mic-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: rgba(238, 108, 77, 0.10);
+  border: 1px solid rgba(238, 108, 77, 0.32);
+  border-radius: 999px;
+  align-self: flex-start;
+}
+
+.mic-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ee4d4d;
+  box-shadow: 0 0 0 0 rgba(238, 77, 77, 0.65);
+  animation: mic-dot-pulse 1.4s ease-out infinite;
+}
+
+@keyframes mic-dot-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(238, 77, 77, 0.65); transform: scale(1); }
+  70%  { box-shadow: 0 0 0 9px rgba(238, 77, 77, 0);    transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0   rgba(238, 77, 77, 0);    transform: scale(1); }
+}
+
+.mic-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 600;
+}
+
+.mic-level-meter {
+  background: rgba(0, 0, 0, 0.32);
+  border-radius: 6px;
+  margin-left: auto;
+}

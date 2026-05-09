@@ -13,12 +13,14 @@ import { officerAvatarHandler, type OfficerAvatarEnv } from "./handlers/officer-
 import { musicHandler, type MusicEnv } from "./handlers/music";
 import { cutePayoffHandler, type CutePayoffEnv } from "./handlers/cute-payoff";
 import { cinematicHandler, type CinematicEnv } from "./handlers/cinematic";
+import { partnerLineHandler, type PartnerLineEnv } from "./handlers/partner-line";
 
 // GMEnv is an alias of OfficerEnv (same OPENAI_API_KEY + OPENAI_TEXT_MODEL).
 // BabySfxEnv extends ElevenLabsEnv (same ELEVENLABS_API_KEY).
 // BabyPortraitEnv and OfficerAvatarEnv use REPLICATE_API_TOKEN (gpt-image-2 via Replicate).
+// BabyPortraitEnv and CinematicEnv also accept FAL_KEY for the fal.ai provider path.
 // MusicEnv and CutePayoffEnv share GOOGLE_SERVICE_ACCOUNT_JSON.
-// CinematicEnv requires REPLICATE_API_TOKEN (already set as a Worker secret; same field as above).
+// CinematicEnv requires REPLICATE_API_TOKEN (Replicate path) or FAL_KEY (fal path).
 interface Env
   extends OfficerEnv,
     ElevenLabsEnv,
@@ -31,7 +33,8 @@ interface Env
     OfficerAvatarEnv,
     MusicEnv,
     CutePayoffEnv,
-    CinematicEnv {
+    CinematicEnv,
+    PartnerLineEnv {
   ASSETS: Fetcher;
 }
 
@@ -89,6 +92,7 @@ export default {
     if (path === "/api/cute-payoff/video") return cutePayoffHandler(request, env);
     // cinematic handles both POST (initiate Seedance 2.0) and GET (poll) internally
     if (path === "/api/cinematic") return cinematicHandler(request, env);
+    if (path === "/api/partner/line" && method === "POST") return partnerLineHandler(request, env);
 
     if (path.startsWith("/api/")) {
       return new Response(JSON.stringify({ error: "not_found", path }), {

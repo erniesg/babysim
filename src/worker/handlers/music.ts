@@ -14,9 +14,9 @@ const VALID_VIBES = new Set<Vibe>(["intro", "argument", "verdict"]);
 
 const VIBE_PROMPTS: Record<Vibe, string> = {
   intro:
-    "Slow, ominous bureaucratic theme. Plucked strings, light timpani, distant brass. Evokes 1970s East Asian government drama. Instrumental, no vocals. Loopable.",
+    "Driving cinematic title cue, brisk 110 BPM. Stabs of rhythmic pizzicato strings, syncopated kick + snare on a heavy reverb, low brass marcato motif, occasional timpani hit, glittery harp arpeggio every two bars. Energetic and adventurous — like a 1970s East Asian state-drama opener crossed with a heist movie. Builds urgency without losing menace. Instrumental, no vocals. Loopable.",
   argument:
-    "Tense domestic scene underscore. Rising string phrases, nervous pizzicato, muted brass stabs. 1970s East Asian family drama style. Instrumental, no vocals. Builds slowly.",
+    "Tense domestic scene underscore, escalating. Rising string ostinato, nervous pizzicato, muted brass stabs, syncopated low-end pulse. 1970s East Asian family drama style. Instrumental, no vocals. Builds.",
   verdict:
     "Solemn bureaucratic verdict cue. Stately low brass, single dampened timpani hit, held string chord resolving downward. Evokes official judgment. Instrumental, no vocals. Short, final.",
 };

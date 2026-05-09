@@ -37,3 +37,7 @@ Only after the local loop lands should the Worker + Durable Object transport rep
 
 The demo is complete when a fresh session reaches debrief in 2-3 minutes and remains playable without OpenAI, Gemini, Realtime, generated videos, or mic access.
 
+## Current state (live)
+
+The local loop has shipped. The deployed Worker now wires three live LLM agents (Officer / Baby / Partner) on top of the deterministic engine — the reducer remains authoritative; agent tool calls are consultative. Durable Objects are NOT yet introduced; multiplayer/`GameSessionDO` is still pending. See `docs/HANDOFF.md` for the current state.
+

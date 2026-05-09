@@ -144,6 +144,21 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
     return await new Promise((resolve, reject) => {
       if (!ws) return reject(new Error("ws not created"));
 
+      // Hard timeout — if setupComplete doesn't arrive within 12 s the user
+      // sees the "Connecting…" pill forever. Fail loudly so the UI can show
+      // the scripted-line fallback.
+      const setupTimeoutMs = 12_000;
+      const setupTimer = setTimeout(() => {
+        if (!opened) {
+          const detail = `setupComplete not received within ${setupTimeoutMs} ms — likely auth/quota/network. Token source: ${tokenInfo.source ?? "?"}.`;
+          log("setup timeout", detail);
+          emit({ type: "error", error: detail });
+          try { ws?.close(); } catch { /* noop */ }
+          reject(new Error(detail));
+        }
+      }, setupTimeoutMs);
+      const clearSetupTimer = () => clearTimeout(setupTimer);
+
       const opts = {
         onOpen: () => {
           if (!ws) return;
@@ -183,13 +198,17 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
             const detail = `${anyMsg.error.code ?? "?"} ${anyMsg.error.status ?? ""} — ${anyMsg.error.message ?? "(no message)"}`;
             log("ws server error frame", anyMsg.error);
             emit({ type: "error", error: detail });
-            if (!opened) reject(new Error(detail));
+            if (!opened) {
+              clearSetupTimer();
+              reject(new Error(detail));
+            }
             return;
           }
 
           if (msg.setupComplete && !opened) {
             log("setup complete — session live");
             opened = true;
+            clearSetupTimer();
             emit({ type: "open" });
             resolve();
             return;
@@ -223,11 +242,23 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
         onError: (errMsg: string) => {
           log("ws error", errMsg);
           emit({ type: "error", error: errMsg });
-          if (!opened) reject(new Error(errMsg));
+          if (!opened) {
+            clearSetupTimer();
+            reject(new Error(errMsg));
+          }
         },
         onClose: (code: number, reason: string) => {
           log("ws close", { code, reason });
+          clearSetupTimer();
           emit({ type: "closed", code, reason });
+          // If the WS closes BEFORE setupComplete arrives, surface this — most
+          // common cause is the auth/tokens 404 fallback being a master key the
+          // wss endpoint then rejects with a 1006/1011 close.
+          if (!opened) {
+            const detail = `WebSocket closed before setupComplete (code ${code}${reason ? `, ${reason}` : ""}). Token source: ${tokenInfo.source ?? "?"}.`;
+            emit({ type: "error", error: detail });
+            reject(new Error(detail));
+          }
         },
       };
 

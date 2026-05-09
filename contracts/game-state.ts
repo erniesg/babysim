@@ -118,7 +118,11 @@ export type GameEvent = {
     | "AUDIO_STOPPED"
     | "STATE_CHANGED"
     | "PANIC"
-    | "SKIP_TO";
+    | "SKIP_TO"
+    // Agent-consultative events: LLM tool calls that the reducer applies
+    // as clamped deltas. Engine remains authoritative.
+    | "AGENT_VISUAL_STATE"
+    | "AGENT_NEED_DELTA";
   action?: GameAction;
   payload?: Record<string, unknown>;
 };
