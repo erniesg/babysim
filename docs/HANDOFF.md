@@ -2,10 +2,10 @@
 
 **Live:** https://babysim.berlayar.ai · **Repo:** local at `/Users/erniesg/code/erniesg/babysim/`
 `main` deploys via `npm run deploy` → Cloudflare Workers (`wrangler deploy`). Tail with `npm run tail`.
-Engine source tests: 76 (`src/engine/__tests__/engine.test.ts`); `npx tsc --noEmit` clean.
+Source tests: 84 (`src/engine/__tests__/engine.test.ts` + `src/realtime/openai-realtime.test.ts`); `npx tsc --noEmit` clean.
 Latest deploy: see `npx wrangler deployments list`.
 
-> **Note on test count.** `npx vitest run` currently reports 228 because compiled `.js` artifacts sit alongside the `.ts` sources in `src/engine/__tests__/` AND a `.claude/worktrees/demo-video/...` copy is picked up. The real count is 76. Cleanup below.
+> **Note on stale `.js` artifacts.** Compiled `.js` files still sit beside TypeScript sources, but `vitest.config.ts` now excludes `.js` tests and Vite/Vitest resolver order prefers `.ts` / `.tsx` before `.js`, so `npx vitest run` reports the source suite only.
 
 ## Goal
 
@@ -13,7 +13,8 @@ A 2-minute multi-agent improv simulator on Cloudflare Workers. Three LLM-driven 
 
 - **Officer** (`gpt-5.5`) — Three.js muppet, ElevenLabs voice. **7 tools**: `say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input`. Drives the cinematic intake.
 - **Baby** (`gpt-5.5`) — 2.5D layered PuppetCanvas, real recorded baby cries from the donateacry public dataset (hunger / tired / discomfort / coo). **8 tools**: `play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`, `trigger_fallback`. Reducer-modulated reactions via the rolled `soothing` trait (`SOOTHING_AFFINITY` table).
-- **Partner** (`gemini-3.1-flash-lite` for text via `/api/partner/line`, `gemini-3.1-flash-live` for argument-beat realtime mic) — scripted-line floor + live-text override per beat. Realtime mic during arguments only.
+- **Partner** (`gemini-3.1-flash-lite` for text via `/api/partner/line`, OpenAI `gpt-realtime` by default for argument-beat realtime mic) — scripted-line floor + live-text override per beat. Gemini Flash Live is still selectable once Vertex Live API auth/tokens is enabled.
+- **GM** (`gpt-5.5`) — `/api/gm` emits validated `DirectorCommand[]`; browser caller runs once per beat entry and dispatches through `DirectorRuntime.executeCommand()`.
 
 Engine reducer (`src/engine/reducer.ts`) is authoritative. Agent tool calls are CONSULTATIVE — the runtime applies them through validated events, not direct mutation. `BEAT_GRAPH` (`contracts/beats.ts`) gates beat transitions.
 
@@ -39,6 +40,8 @@ Engine reducer (`src/engine/reducer.ts`) is authoritative. Agent tool calls are 
 - `src/worker/handlers/officer.ts` exposes 7 tools to gpt-5.5; `src/llm/officer-agent.ts` returns parsed `tools[]`; `src/Game.tsx` dispatches each.
 - `src/worker/handlers/baby.ts` exposes **8 tools**; runtime has `dispatchAgentEvent` (`src/engine/runtime.ts`) for `AGENT_VISUAL_STATE` / `AGENT_NEED_DELTA` events; consultative deltas validated + clamped by reducer.
 - `src/worker/handlers/partner-line.ts` hits `gemini-3.1-flash-lite` per beat; client at `src/llm/partner-agent.ts`. Behind `VITE_PARTNER_LIVE_TEXT=1` flag.
+- `src/worker/handlers/gm.ts` exposes **7 DirectorCommand tools**; client at `src/llm/gm-agent.ts`. `src/Game.tsx` calls it once per beat entry when `VITE_ENABLE_GM_AGENT` is not `0`/`false`, and maps tools through `DirectorRuntime.executeCommand()` so `ENTER_BEAT` remains graph-gated.
+- `src/realtime/openai-realtime.ts` is the default argument provider. It registers the four partner tools via `session.update`, parses `response.function_call_arguments.done` plus `response.output_item.done`, acknowledges tool outputs, and routes tool effects through reducer-owned `agent_partner_tool` messages.
 - **Per-beat baby agent trigger wired** at `src/Game.tsx:643-663` — `BEAT_ENTERED` fires one throttled `callBabyAgent()` per gameplay beat, dispatches resulting tools through `dispatchBabyTool`. (Was listed pending in prior handoff; closed.)
 - **Music prefetch wired** at `src/Game.tsx:270` and `src/Game.tsx:405` — `audioRef.current?.prefetch("music.probation_theme")` fires before officer_intro snap so Lyria has head-start. (Was listed pending in prior handoff; closed.)
 
@@ -108,7 +111,7 @@ curl -sX POST https://babysim.berlayar.ai/api/baby       # 400 (expects JSON)
 2. **Generate path doesn't yet run a full rig pipeline.** `/api/baby/portrait` returns a flat `gpt-image-2` portrait; promoting that to a 14-layer 2.5D rig requires porting `babysteps-ai-baby-simulator/tools/ai-baby-simulator/lib/puppet-layer-plan.mjs` into a Worker handler. Until then, fallback to the canonical rig and overlay the live portrait on top.
 3. **Photo intake face count + partner-photo branch.** `PhotoIntake` accepts 1-or-2-face with `countHint` but doesn't branch the flow.
 4. **DurableObject multiplayer.** "Join a Room" still alerts (`src/Game.tsx:1117`); no `GameSessionDO` + WebSocket.
-5. **Stale compiled `.js` in `src/`** (60 files alongside the `.tsx` sources). Causes vitest to double-count (228 reported, 76 real). Add `**/*.js` exclusion to vitest config OR delete artifacts and add to `.gitignore`. Worktree copy at `.claude/worktrees/demo-video/...` already gitignored (`cac5ecc`) — but vitest still discovers it. Add a `vitest.config.ts` with `test.exclude: ["**/*.js", ".claude/**"]`.
+5. **Stale compiled `.js` in `src/`** (60 files alongside the `.tsx` sources). Mitigated locally by `vitest.config.ts` excluding `.js` tests and both Vite/Vitest preferring `.ts` / `.tsx` before `.js`. Cleanup still worth doing later: delete generated artifacts and add a repo rule to prevent them coming back.
 6. **Gemini realtime model name in handoff doc was wrong.** Code uses `gemini-3.1-flash-live` (`src/worker/handlers/realtime-gemini-token.ts:40`). Prior doc said `-preview`. Fixed here.
 
 ## Provider swap matrix
@@ -117,7 +120,8 @@ curl -sX POST https://babysim.berlayar.ai/api/baby       # 400 (expects JSON)
 |---|---|---|---|
 | Officer text | `OPENAI_TEXT_MODEL` | `gpt-5.5` | any chat model |
 | Officer voice | `VITE_OFFICER_VOICE_PROVIDER` | `elevenlabs` | `browser` / `off` |
-| Realtime partner | `VITE_REALTIME_PARTNER_PROVIDER` | `gemini` | `openai` |
+| GM director | `VITE_ENABLE_GM_AGENT` | on | `0`/`false` to force deterministic runtime only |
+| Realtime partner | `VITE_REALTIME_PARTNER_PROVIDER` | `openai` | `gemini` once Vertex Live API auth/tokens is enabled |
 | Realtime partner model (gemini) | `GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live` | any Live-API-capable Gemini |
 | Live partner text | `VITE_PARTNER_LIVE_TEXT` | off | `1` to enable |
 | Live baby SFX | `VITE_LIVE_BABY_SFX` | off | `1` (ElevenLabs `text_to_sound_v2`) |
@@ -141,7 +145,7 @@ curl -sX POST https://babysim.berlayar.ai/api/baby       # 400 (expects JSON)
 npm run dev:worker                                       # local full stack on :8787
 npm run deploy                                           # build + wrangler deploy
 npm run tail                                             # stream Worker logs
-npx vitest run                                           # 228 reported / 76 real (see test-count note)
+npx vitest run                                           # 84 source tests
 npx tsc --noEmit                                         # typecheck
 echo "$KEY" | npx wrangler secret put SECRET_NAME
 
@@ -198,4 +202,4 @@ public/puppets/baby-photoreal-v1/  ← NEW — six per-state plates from babyste
 
 ## Pickup prompt for next agent
 
-> Continue work on https://babysim.berlayar.ai/. Repo: `/Users/erniesg/code/erniesg/babysim/`. Read `docs/HANDOFF.md` first — it lists what's deployed, what's not built, and the gotchas. The headline priority is the **photo-state iteration cycle for the adopted rig** (section above): copy the six PNGs from `/Users/erniesg/code/erniesg/babysteps-ai-baby-simulator/artifacts/ai-baby-simulator/visual-validation/restored-active-sealed-v1/` into `public/puppets/baby-photoreal-v1/states/`, add a `puppet.json` with `layout: "full-frame-photo-states"`, append to `ADOPT_RIG_POOL`, branch `PuppetCanvas` to render the new layout, tighten `TRANSITION_MS` to 320, add `deriveVisualState(needs, activeCry, isAsleep)` to `src/engine/reducer.ts` so the agent's `set_visual_state` becomes a decaying override on top of need-derived state, and extend `AudioDirector` so per-state cry-channel volume modulates with the visualState (settled 0 → crying 0.85). Add a unit test that walks `hunger:80 → "hungry" → feed → "settled"` and verify the cry channel fades. Engine tests must stay green (76 source tests in `src/engine/__tests__/engine.test.ts`). While there, add `vitest.config.ts` with `test.exclude: ["**/*.js", ".claude/**"]` to stop the 76→228 double-count. Don't reintroduce external project name references. Deploy with `npm run deploy` and verify the live URL with the curl block in this doc.
+> Continue work on https://babysim.berlayar.ai/. Repo: `/Users/erniesg/code/erniesg/babysim/`. Read `docs/HANDOFF.md` first — it lists what's deployed, what's not built, and the gotchas. The current validation branch wires the GM browser caller, routes realtime partner tools through reducer-owned ledger/state updates, defaults the argument mic to OpenAI Realtime, and keeps Gemini Live documented as blocked until Vertex Live API auth/tokens works. Keep `npx tsc --noEmit` and `npx vitest run` green before deploy.

@@ -12,7 +12,7 @@ A 2-minute multi-agent improv simulator. The pitch (read once, hold it):
 
 > The Ministry of Family and Human Development pairs you with an AI newborn whose traits are hidden: soothing archetype, feeding pattern, temperament. You don't chat with it. You read the cry, try feed / rock / sing / shush / hold, and learn what works. A tired AI partner shares the room with their own hidden state — fatigue, resentment, willingness to take the night shift. At 3am you argue out loud; they can take the shift or push back mid-sentence. Then the muppet judges you.
 >
-> Four LLM agents call tools live. Officer (gpt-5.5, ElevenLabs voice) drives the scene. Baby (gpt-5.5) picks mood and need deltas. Partner runs Gemini Flash Lite for lines and a realtime voice agent during the argument that can call `take_night_shift / refuse_night_shift / concede_argument / raise_resentment` mid-sentence. A GM emits validated `DirectorCommand[]` across a 21-beat graph. Every tool call goes through one reducer that clamps deltas and rejects out-of-graph beats. Same tool-call shape, swap any agent between scripted and live via env flag. Hand-rolled on Cloudflare Workers.
+> Four LLM agents call tools live. Officer (gpt-5.5, ElevenLabs voice) drives the scene. Baby (gpt-5.5) picks mood and need deltas. Partner runs Gemini Flash Lite for lines and OpenAI Realtime by default during the argument; Gemini Flash Live is ready once Vertex Live API auth/tokens is enabled. The realtime partner can call `take_night_shift / refuse_night_shift / concede_argument / raise_resentment` mid-sentence. A GM emits validated `DirectorCommand[]` across a 21-beat graph. Every tool call goes through one reducer/runtime path that clamps deltas and rejects out-of-graph beats. Same tool-call shape, swap any agent between scripted and live via env flag. Hand-rolled on Cloudflare Workers.
 
 ## Verified vs. broken (state at handoff)
 
@@ -24,26 +24,24 @@ A 2-minute multi-agent improv simulator. The pitch (read once, hold it):
 | Officer = gpt-5.5 + ElevenLabs voice | OK | `src/worker/handlers/officer.ts` uses `OPENAI_TEXT_MODEL=gpt-5.5`; `officer-tts.ts` maps Ernest/Bern/Crumb to Liam/George/Daniel ElevenLabs voice IDs |
 | Baby = gpt-5.5, picks mood + need deltas | OK | `handlers/baby.ts` (gpt-5.5), 8 tools incl. `set_mood_delta` / `set_need_delta` / `set_visual_state` |
 | Partner text per beat = Gemini Flash Lite | OK | `handlers/partner-line.ts` calls `gemini-3.1-flash-lite`; default-on; chat-history threading shipped |
-| Partner argument = realtime voice w/ tools | PARTIAL | OpenAI Realtime fully wired (`src/realtime/openai-realtime.ts` — system prompt + 4 tools + per-archetype voice + server_vad). Gemini Flash Live broken (auth/tokens 404 — see soft spot 2 below). |
-| GM emits validated DirectorCommand[] | NOT WIRED | `/api/gm` exists with 7 tools but nothing on the client calls it (see soft spot 1) |
+| Partner argument = realtime voice w/ tools | OK / GEMINI BLOCKED | OpenAI Realtime is default and wired (`src/realtime/openai-realtime.ts` — system prompt + 4 tools + per-archetype voice + server_vad + current Realtime event names). Gemini Flash Live remains blocked by auth/tokens 404 (see soft spot 2 below). |
+| GM emits validated DirectorCommand[] | OK | `src/llm/gm-agent.ts` calls `/api/gm` once per beat entry from `src/Game.tsx`; tools are mapped to `DirectorCommand` and executed through `DirectorRuntime.executeCommand()` |
 | 21-beat graph | OK | Counted 21 ids in `contracts/beats.ts` |
-| Mid-sentence tool calls mutate state | UNVERIFIED | Code path is right; not smoke-tested live (see soft spot 3) |
+| Mid-sentence tool calls mutate state | LOCALLY VERIFIED | Realtime partner tools route through `agent_partner_tool` → reducer `STATE_CHANGED`; `take_night_shift` / `concede_argument` increment `ledger.partnerNightShifts`; `raise_resentment` clamps partner resentment |
 | Reducer clamps + rejects out-of-graph | OK | `reducer.ts` clamps via `clamp()`; rejects unknown actions per beat at line ~84 |
-| Per-agent scripted/live env swap | OK | `VITE_ENABLE_OFFICER_AGENT`, `VITE_ENABLE_BABY_AGENT`, `VITE_PARTNER_LIVE_TEXT`, `VITE_REALTIME_PARTNER_PROVIDER`. All have scripted fallbacks. |
+| Per-agent scripted/live env swap | OK | `VITE_ENABLE_OFFICER_AGENT`, `VITE_ENABLE_BABY_AGENT`, `VITE_ENABLE_GM_AGENT`, `VITE_PARTNER_LIVE_TEXT`, `VITE_REALTIME_PARTNER_PROVIDER`. All have deterministic/scripted fallbacks. |
 | Cloudflare Workers, no SDK | OK | Plain `fetch` handlers in `src/worker/handlers/` |
 | 2.5D rig | OK | `PuppetCanvas` + `public/puppets/baby-photoreal-v1/` (clean transparent plates from babysteps crib-cycle-v1) |
 
-## Three soft spots — your job is to close or restate the pitch
+## Three soft spots — current state after local validation patch
 
-### 1. GM agent claim is currently false
+### 1. GM agent claim is closed locally
 
-`/api/gm` exists in `src/worker/handlers/gm.ts` with 7 tools (`enter_beat`, `set_caption`, `play_audio`, `stop_audio`, `ask_agent`, `advance_time`, `trigger_fallback`). The 21-beat graph is driven entirely by `src/engine/runtime.ts` + the reducer; **no client-side caller** invokes the GM agent.
+`/api/gm` exists in `src/worker/handlers/gm.ts` with 7 tools (`enter_beat`, `set_caption`, `play_audio`, `stop_audio`, `ask_agent`, `advance_time`, `trigger_fallback`). The browser now invokes it through `src/llm/gm-agent.ts` once per beat entry from `src/Game.tsx`.
 
-Verify: `rg "callGmAgent|/api/gm" src/ --type tsx --type ts` returns 0 hits in `src/` (only the route table in `src/worker/index.ts`).
+Returned tools are converted to `DirectorCommand` and sent through `DirectorRuntime.executeCommand()`. `ENTER_BEAT` still goes through the runtime's `BEAT_GRAPH.possibleNextBeats` gate; no GM command mutates React state directly. `SET_CAPTION` now updates `GameState.directorCaption`, so GM captions are visible instead of being a no-op.
 
-Path A — preferred, makes the pitch literally true: wire a per-beat `callGmAgent(beatId, state)` call from `src/Game.tsx` (similar shape to `callBabyAgent` at line ~643), throttled once per beat-entry. Dispatch its tool calls through the runtime so the GM can `set_caption` / `play_audio` / `advance_time`. Don't let it call `enter_beat` directly — route through the same beat-transition gate the reducer enforces.
-
-Path B — cheaper, restate the pitch line: *"a GM tool surface is wired; the deterministic runtime currently fills that role and the reducer rejects out-of-graph mutations from any agent."*
+Verify: `rg "callGmAgent|/api/gm" src/ --type tsx --type ts` should show the route plus `src/llm/gm-agent.ts` and the `src/Game.tsx` beat-entry caller.
 
 ### 2. Gemini Flash Live doesn't work in this environment
 
@@ -58,11 +56,11 @@ Root cause: the `GEMINI_API_KEY` is from AI Studio; the v1alpha `auth/tokens` en
 
 Code today (`src/realtime/factory.ts`) defaults to OpenAI Realtime. The OpenAI path was rebuilt in commit `680ed10` to be fully featured — `session.update` with archetype-aware system prompt, per-archetype voice (`shimmer`/`ash`/`ballad`/`verse`), 4 function tools matching Gemini's, `server_vad` turn detection. The Gemini token handler already sends `liveConnectConstraints` so it'll work the moment auth/tokens stops 404'ing.
 
-Decision: rewrite the pitch line to *"OpenAI Realtime by default; Gemini Flash Live ready when Vertex Live API is enabled"* OR enable the GCP API out-of-band. The HUD has an OpenAI ⇄ Gemini pill (top-right) for runtime A/B once both work.
+Decision applied in docs/pitch: say *"OpenAI Realtime by default; Gemini Flash Live ready when Vertex Live API is enabled"*. The HUD has an OpenAI ⇄ Gemini pill (top-right) for runtime A/B once both work.
 
 ### 3. OpenAI Realtime tool dispatch is unverified end-to-end
 
-The code path: WebRTC connects → `session.update` sends tools → user speaks → OpenAI emits `response.function_call_arguments.done` → `dc.onmessage` parses → `emit({ type: "tool_call", ... })` → `RealtimePartner.onToolCall` → `Game.tsx` dispatches through engine reducer. Smoke-test it.
+The code path: WebRTC connects → `session.update` sends tools → user speaks → OpenAI emits `response.function_call_arguments.done` or `response.output_item.done` function-call item → `dc.onmessage` parses → `emit({ type: "tool_call", ... })` → `RealtimePartner.onToolCall` → `Game.tsx` dispatches through engine reducer. Smoke-test it against live audio.
 
 How:
 - Start a new game with `?debug=1` to see beat IDs
@@ -73,7 +71,7 @@ How:
 - Open devtools console; watch for `[OpenAIRealtime] tool call` log lines
 - Also test the **text fallback** input — should always work even if mic blocked
 
-If tool calls don't fire, check `dc.onmessage` event types coming from OpenAI; their event names occasionally drift between API versions. Current handler listens for: `response.audio_transcript.delta`, `response.text.delta`, `response.audio_transcript.done`, `response.text.done`, `response.function_call_arguments.done`, `error`.
+If tool calls don't fire, check `dc.onmessage` event types coming from OpenAI. Current handler listens for: `response.audio_transcript.delta`, `response.text.delta`, `response.output_text.delta`, `response.audio_transcript.done`, `response.text.done`, `response.output_text.done`, `response.function_call_arguments.done`, `response.output_item.done`, `error`.
 
 ## Acceptance checks (run all before deploying)
 
@@ -82,7 +80,7 @@ cd /Users/erniesg/code/erniesg/babysim/
 
 # Build sanity
 npx tsc --noEmit         # must be clean
-npx vitest run           # 79 tests, must pass
+npx vitest run           # must pass
 
 # Live API smoke tests against current prod
 BASE=https://babysim.berlayar.ai
@@ -125,9 +123,9 @@ Open https://babysim.berlayar.ai (or local `npm run dev:worker` on :8787). Hard-
 
 ## Files most likely to need touching
 
-- `src/Game.tsx` — adds `callGmAgent` call site if doing path A on gap #1
-- `src/llm/gm-agent.ts` — currently doesn't exist (the worker handler does); create the client wrapper if path A
-- `src/realtime/openai-realtime.ts` — only touch if event names drift; current code targets the late-2025 OpenAI Realtime API event surface
+- `src/Game.tsx` — GM beat-entry caller and realtime partner tool dispatch
+- `src/llm/gm-agent.ts` — client wrapper for `/api/gm`
+- `src/realtime/openai-realtime.ts` — OpenAI event parsing and function-call output ack
 - `docs/HANDOFF.md` — last comprehensive update is from before the recent realtime / HUD commits; refresh if you change anything load-bearing
 
 ## Recent commits (newest first, last 9)

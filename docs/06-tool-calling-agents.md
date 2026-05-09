@@ -20,8 +20,9 @@ plus a Realtime voice path for the Partner during the night argument.
 > - Partner per-beat text (`/api/partner/line`, `gemini-3.1-flash-lite`) — 1
 >   tool: `say_line`. Lives in `src/worker/handlers/partner-line.ts`. Behind
 >   `VITE_PARTNER_LIVE_TEXT=1`.
-> - Partner realtime mic during arguments only (`gemini-3.1-flash-live-preview`,
->   swap to `gpt-realtime` via `VITE_REALTIME_PARTNER_PROVIDER=openai`).
+> - Partner realtime mic during arguments only (`gpt-realtime` by default;
+>   swap to Gemini Live via `VITE_REALTIME_PARTNER_PROVIDER=gemini` once Vertex
+>   Live API auth/tokens is enabled).
 > - GM (`/api/gm`, `gpt-5.5`) — full `DirectorCommand[]` surface;
 >   `enter_beat` is server-side validated against `BEAT_GRAPH`.
 >
