@@ -31,11 +31,13 @@ The dynamic, fully-generated experience is the product. Deterministic implementa
 
 ## Existing Asset References
 
-Do not copy these until explicitly requested.
+Pre-baked assets live under `public/`. Do not regenerate or replace without explicit direction.
 
-- Baby PNG source: `../internal-pipeline/artifacts/ai-baby-simulator/2p5d-puppet/upload-derived-photoreal-avatar-rig-latest/previews/`
-- Baby audio source: `../internal-pipeline/artifacts/ai-baby-simulator/live-same-baby-pack-20260509/`
-- Muppet prototype: `../internal-rig/prototype/muppet-onboarding.*`
+- Baby photoreal preview PNGs: `public/img/baby/{settled,drowsy,hungry,fussy,crying,sleep}.png`
+- Baby state-transition video clips: `public/video/baby/`
+- Baby 2.5D puppet rig (canvas-composited): `public/puppets/baby/puppet.json` + `public/puppets/baby/layers/*.png`
+- Baby cry audio: `public/audio/baby/{hunger,tired,discomfort,coo}.mp3`
+- Officer puppet pre-baked portraits: `public/img/officer-{ernest,bern,crumb}-{strict,warm,skeptical,delighted}.png`
 
 ## Runtime Safety
 

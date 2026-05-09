@@ -8,7 +8,7 @@ const log = (...args: unknown[]) => console.log("[OfficerVoice]", ...args);
 
 export async function fetchOfficerVoiceUrl(
   text: string,
-  officer: "Tan" | "Lim" | "Wong",
+  officer: "Ernest" | "Bern" | "Crumb" | "Tan" | "Lim" | "Wong",
 ): Promise<string | null> {
   log("requesting", { officer, textLen: text.length });
   try {

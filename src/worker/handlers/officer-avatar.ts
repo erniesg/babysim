@@ -1,6 +1,6 @@
 // Officer avatar endpoint — Replicate openai/gpt-image-2 for officer expression variants.
 // Returns image/png bytes, cached 1h.
-// Frontend falls back to pre-baked /img/officer-tan-{strict,warm}.png on non-200.
+// Frontend falls back to pre-baked /img/officer-ernest-{strict,warm,skeptical,delighted}.png on non-200.
 
 export interface OfficerAvatarEnv {
   REPLICATE_API_TOKEN: string;
@@ -10,12 +10,44 @@ export interface OfficerAvatarEnv {
 }
 
 type OfficerExpression = "strict" | "warm" | "skeptical" | "delighted";
-type OfficerName = "Tan" | "Lim" | "Wong";
+type OfficerName = "Ernest" | "Bern" | "Crumb";
 
 const VALID_EXPRESSIONS = new Set<OfficerExpression>(["strict", "warm", "skeptical", "delighted"]);
-const VALID_OFFICERS = new Set<OfficerName>(["Tan", "Lim", "Wong"]);
+const VALID_OFFICERS = new Set<OfficerName>(["Ernest", "Bern", "Crumb"]);
 
-// Expression descriptors cribbed directly from scripts/generate-officer-avatar.mjs
+// Shared cinematic framing suffix used by all character prompts
+const SHARED_FRAMING = [
+  "Wardrobe: dark navy government uniform with a small gold lapel badge, crisp collar, narrow tie.",
+  "Setting: dim crimson velvet curtain backdrop with soft folds; a wooden government desk in the lower-third foreground holds a brass desk stamp; faint gold accents catch light.",
+  "Lighting: single dramatic key light from upper-left, deep falloff into shadow on the right side; warm undertones, slightly desaturated palette.",
+  "Style: cinematic, dignified, faintly menacing, light film grain, painterly photographic feel, shallow depth of field. Photorealistic puppet with felt/fur textures and visible stitching — not cartoon.",
+  "Composition: tight head-and-shoulders, square 1:1 framing, subject roughly centered, eyes just past camera as if reviewing a file.",
+  "No text, no watermarks, no overlaid graphics.",
+].join(" ");
+
+// Per-character base prompts — Sesame-Street-inspired puppet civil servants
+const CHARACTER_BASE_PROMPTS: Record<OfficerName, string> = {
+  Ernest: [
+    'Stylized 1970s Singaporean government drama portrait of "Officer Ernest", a Sesame-Street-inspired puppet civil servant.',
+    "Ernest has a round head, large oval eyes with prominent black pupils, warm orange fur/skin tone, and a mischievous half-smile by default.",
+    "He wears a dark navy government uniform with a narrow tie and small gold lapel badge.",
+    SHARED_FRAMING,
+  ].join(" "),
+  Bern: [
+    'Stylized 1970s Singaporean government drama portrait of "Officer Bern", a Sesame-Street-inspired puppet civil servant.',
+    "Bern has a tall vertical-oval head, a pronounced heavy mono-brow, yellow fur/skin tone, pursed frowning mouth, and a severe humorless bearing.",
+    "He wears a dark navy government uniform with a narrow tie and small gold lapel badge.",
+    SHARED_FRAMING,
+  ].join(" "),
+  Crumb: [
+    'Stylized 1970s Singaporean government drama portrait of "Officer Crumb", a Sesame-Street-inspired puppet civil servant.',
+    "Crumb has a shaggy round head, wide-set googly eyes mounted high on the face, deep-blue fuzzy fur texture, and a perpetually-distracted expression.",
+    "He wears a dark navy government uniform with a slightly rumpled narrow tie and small gold lapel badge.",
+    SHARED_FRAMING,
+  ].join(" "),
+};
+
+// Expression descriptors — shared across characters; character personality colors the base prompt
 const EXPRESSION_DESCRIPTORS: Record<OfficerExpression, string> = {
   strict:
     "severely strict and disapproving expression, jaw set, brow lowered, eyes narrowed and locked just past camera, lips pressed thin.",
@@ -27,22 +59,9 @@ const EXPRESSION_DESCRIPTORS: Record<OfficerExpression, string> = {
     "rare controlled delight — a satisfied upturn at one corner of the mouth, eyes just brightened enough to notice, the look of a stamp approved without comment.",
 };
 
-// Base prompt from scripts/generate-officer-avatar.mjs
-const BASE_PROMPT = [
-  'Stylized 1970s East Asian government drama portrait of "Officer Tan", a 50-year-old Singaporean/Malaysian civil servant.',
-  "Wardrobe: dark navy government uniform with a small gold lapel badge, crisp collar, narrow tie.",
-  "Setting: dim crimson velvet curtain backdrop with soft folds; a wooden government desk in the lower-third foreground holds a brass desk stamp; faint gold accents catch light.",
-  "Lighting: single dramatic key light from upper-left, deep falloff into shadow on the right side; warm undertones, slightly desaturated palette.",
-  "Style: cinematic, dignified, faintly menacing, light film grain, painterly photographic feel, shallow depth of field.",
-  "Composition: tight head-and-shoulders, square 1:1 framing, subject roughly centered, eyes just past camera as if reviewing a file.",
-  "No text, no watermarks, no overlaid graphics.",
-].join(" ");
-
 function buildPrompt(expression: OfficerExpression, officer: OfficerName): string {
-  const nameNote = officer !== "Tan"
-    ? ` (referred to internally as Officer ${officer}, same uniform and aesthetic as Tan)`
-    : "";
-  return `${BASE_PROMPT}${nameNote} Expression: ${EXPRESSION_DESCRIPTORS[expression]}`;
+  const base = CHARACTER_BASE_PROMPTS[officer] ?? CHARACTER_BASE_PROMPTS.Ernest;
+  return `${base} Expression: ${EXPRESSION_DESCRIPTORS[expression]}`;
 }
 
 // Replicate model: openai/gpt-image-2
@@ -93,7 +112,7 @@ export async function officerAvatarHandler(request: Request, env: OfficerAvatarE
   const officer: OfficerName =
     body.officer && VALID_OFFICERS.has(body.officer as OfficerName)
       ? (body.officer as OfficerName)
-      : "Tan";
+      : "Ernest";
 
   const prompt = buildPrompt(expression, officer);
   log("generating avatar via Replicate gpt-image-2", { officer, expression });

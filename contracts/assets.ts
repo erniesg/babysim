@@ -19,11 +19,8 @@ export const ASSETS = {
 } as const;
 
 export const SOURCE_REFERENCES = {
-  existingBabyPngSource:
-    "../internal-pipeline/artifacts/ai-baby-simulator/2p5d-puppet/upload-derived-photoreal-avatar-rig-latest/previews/",
-  existingBabyAudioSource:
-    "../internal-pipeline/artifacts/ai-baby-simulator/live-same-baby-pack-20260509/",
-  existingMuppetPrototype:
-    "../internal-rig/prototype/muppet-onboarding.*",
+  existingBabyPngSource: "public/img/baby/",
+  existingBabyAudioSource: "public/audio/baby/",
+  existingPuppetRig: "public/puppets/baby/",
 } as const;
 

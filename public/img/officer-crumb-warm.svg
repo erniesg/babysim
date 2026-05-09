@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bg" cx="35%" cy="30%" r="85%">
+      <stop offset="0%" stop-color="#7a1a22"/>
+      <stop offset="60%" stop-color="#3a0a10"/>
+      <stop offset="100%" stop-color="#180408"/>
+    </radialGradient>
+    <radialGradient id="key" cx="30%" cy="20%" r="55%">
+      <stop offset="0%" stop-color="rgba(255,220,170,0.35)"/>
+      <stop offset="100%" stop-color="rgba(255,220,170,0)"/>
+    </radialGradient>
+    <linearGradient id="uniform" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#162033"/>
+      <stop offset="100%" stop-color="#0a0f1c"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#key)"/>
+  <rect x="0" y="780" width="1024" height="244" fill="#3a2410"/>
+  <ellipse cx="512" cy="900" rx="360" ry="180" fill="url(#uniform)"/>
+  <path d="M380 760 L512 700 L644 760 L644 1024 L380 1024 Z" fill="url(#uniform)"/>
+  <ellipse cx="512" cy="540" rx="170" ry="210" fill="#1e4ac8"/>
+  <rect width="1024" height="1024" fill="url(#key)" opacity="0.4"/>
+  <g font-family="Georgia, serif" fill="#caa64a" opacity="0.65">
+    <text x="80" y="980" font-size="28" letter-spacing="6">OFFICER  CRUMB  · WARM</text>
+  </g>
+</svg>

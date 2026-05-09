@@ -1,0 +1,80 @@
+[
+  {
+    "key": "settled-to-hungry",
+    "status": "ok",
+    "predictionId": "21sr8dr4jnrmt0cy1cdbfysb6c",
+    "predictionPageUrl": "https://replicate.com/p/21sr8dr4jnrmt0cy1cdbfysb6c",
+    "videoUrl": "https://replicate.delivery/xezq/nfJQxsnyTepfPphgv95T91oxPss9ol5CxeRmgUYlgBpjYcMaB/tmpqie4oo00.mp4",
+    "videoPath": "public/video/baby/settled-to-hungry.mp4",
+    "bytes": 2309899,
+    "elapsedSec": 146.3,
+    "generatedAt": "2026-05-09T05:01:00.640Z"
+  },
+  {
+    "key": "hungry-to-crying",
+    "status": "failed",
+    "error": "hungry-to-crying: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "crying-to-fussy",
+    "status": "failed",
+    "error": "crying-to-fussy: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "fussy-to-drowsy",
+    "status": "failed",
+    "error": "fussy-to-drowsy: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "drowsy-to-sleep",
+    "status": "failed",
+    "error": "drowsy-to-sleep: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "settled-to-drowsy",
+    "status": "failed",
+    "error": "settled-to-drowsy: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "settled-idle",
+    "status": "failed",
+    "error": "settled-idle: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "drowsy-idle",
+    "status": "failed",
+    "error": "drowsy-idle: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "hungry-idle",
+    "status": "ok",
+    "predictionId": "t377yen4r9rmy0cy1cd9k17msw",
+    "predictionPageUrl": "https://replicate.com/p/t377yen4r9rmy0cy1cd9k17msw",
+    "videoUrl": "https://replicate.delivery/xezq/goeh2UQpoZyCNaS8uMBvot4zbaNB9ZeTfNNs34Arlu27LOGtA/tmp_nghx_h3.mp4",
+    "videoPath": "public/video/baby/hungry-idle.mp4",
+    "bytes": 1576590,
+    "elapsedSec": 94.4,
+    "generatedAt": "2026-05-09T05:00:49.925Z"
+  },
+  {
+    "key": "fussy-idle",
+    "status": "ok",
+    "predictionId": "m14dyzrnphrmt0cy1ce8yjpnd0",
+    "predictionPageUrl": "https://replicate.com/p/m14dyzrnphrmt0cy1ce8yjpnd0",
+    "videoUrl": "https://replicate.delivery/xezq/caw3lAH3MxYJIh3vgFjGSwFmswQnm4UwWUSlwfeSYW36HHjWA/tmpyzlya2_f.mp4",
+    "videoPath": "public/video/baby/fussy-idle.mp4",
+    "bytes": 2184535,
+    "elapsedSec": 121.6,
+    "generatedAt": "2026-05-09T05:02:51.555Z"
+  },
+  {
+    "key": "crying-idle",
+    "status": "failed",
+    "error": "crying-idle: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  },
+  {
+    "key": "sleep-idle",
+    "status": "failed",
+    "error": "sleep-idle: prediction failed: Prediction failed: Async prediction failed: ModelError: The input or output was flagged as sensitive. Please try again with different inputs. (E005) (uIJ6l3ruRD)"
+  }
+]

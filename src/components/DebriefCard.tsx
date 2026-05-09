@@ -7,7 +7,7 @@ function archetypeFor(state: GameState): { name: string; tagline: string } {
   const partnerNet = ledger.partnerNightShifts + ledger.partnerSoothes - ledger.partnerShirks * 2;
 
   if (ledger.playerShirks >= 3 && playerNet < partnerNet) {
-    return { name: "Strategic Sleeper", tagline: "Theatrical breathing detected. Officer Tan is taking notes." };
+    return { name: "Strategic Sleeper", tagline: "Theatrical breathing detected. The Ministry is taking notes." };
   }
   if (ledger.playerNightShifts >= 2 && ledger.playerSoothes >= 4) {
     return { name: "Night Shifter", tagline: "Eyes ringed with policy. The Ministry recognizes your service." };

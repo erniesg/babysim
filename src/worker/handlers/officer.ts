@@ -13,7 +13,7 @@ type SayToolArgs = {
 
 type RequestBody = {
   beatId: "officer_intro" | "ominous_warning" | "verdict";
-  officerName: "Officer Tan" | "Officer Lim" | "Officer Wong";
+  officerName: "Officer Ernest" | "Officer Bern" | "Officer Crumb" | "Officer Tan" | "Officer Lim" | "Officer Wong";
   ledger?: {
     playerNightShifts: number;
     partnerNightShifts: number;
@@ -53,7 +53,7 @@ const SYSTEM_PROMPTS: Record<RequestBody["beatId"], string> = {
 
 Deliver ONE intro line via say(). Address the applicant directly. Acknowledge that this is a rehearsal. Speak as if this is the eighth case of the day.
 
-CRITICAL: Do NOT introduce yourself by name or rank. Do NOT say "Officer Tan" / "Officer Lim" / "Officer Wong" / "Ministry of Family and Human Development" / similar self-identification — the player can already see who you are. Skip the credentials theater. Just speak.
+CRITICAL: Do NOT introduce yourself by name or rank. Do NOT say "Officer Ernest" / "Officer Bern" / "Officer Crumb" / "Ministry of Family and Human Development" / similar self-identification — the player can already see who you are. Skip the credentials theater. Just speak.
 
 Pick the expression that fits: strict (default), skeptical (suspicious), warm (rare). Gesture: stamp (definitive), lean (interrogating), nod (acknowledging), wave (dismissive), none.
 

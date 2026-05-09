@@ -79,7 +79,7 @@ export type PartnerState = {
 };
 
 export type OfficerState = {
-  name: "Officer Tan" | "Officer Lim" | "Officer Wong";
+  name: "Officer Ernest" | "Officer Bern" | "Officer Crumb";
   visible: boolean;
   expression: "strict" | "warm" | "skeptical" | "delighted";
   currentLine?: string;

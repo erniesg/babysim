@@ -53,7 +53,7 @@ const PARTNER_ARCHETYPES = ["anxious", "chill", "resentful", "overfunctioner"] a
 const PARTNER_CONFLICT_STYLES = ["defensive", "avoidant", "pleading", "scorekeeping"] as const;
 const PARTNER_HELP_BIAS = ["helps_fast", "waits_to_be_asked", "shirks_when_tired"] as const;
 
-const OFFICER_NAMES = ["Officer Tan", "Officer Lim", "Officer Wong"] as const;
+const OFFICER_NAMES = ["Officer Ernest", "Officer Bern", "Officer Crumb"] as const;
 const OFFICER_EXPRESSIONS = ["strict", "warm", "skeptical", "delighted"] as const;
 
 const PARTNER_NAMES = [

@@ -7,11 +7,17 @@ export interface ElevenLabsEnv {
 }
 
 const VOICE_FOR_OFFICER: Record<string, string> = {
-  // Stable voice IDs from ElevenLabs's default voice library. The officer
-  // archetype maps to a distinct timbre so Tan/Lim/Wong sound different.
-  Tan: "TX3LPaxmHKxFdv7VOQHJ", // Liam — deeper male UK
-  Lim: "EXAVITQu4vr4xnSDxMaL", // Sarah — brisk, mid-range
-  Wong: "JBFqnCBsd6RMkjVDRZzb", // George — warm, mid pitch
+  // Stable voice IDs from ElevenLabs's default voice library.
+  // Ernest (Ernie-likeness): playful mid-deep, mischievous — Liam (deeper UK male with warmth)
+  Ernest: "TX3LPaxmHKxFdv7VOQHJ", // Liam
+  // Bern (Bert-likeness): stern, lower, slow — George (low, measured, authoritative)
+  Bern: "JBFqnCBsd6RMkjVDRZzb", // George
+  // Crumb (Cookie-Monster-likeness): rumbling, chaotic-friendly — Daniel (deep, resonant)
+  Crumb: "onwK4e9ZLuTAKqWW03F9", // Daniel (deep resonant male)
+  // Legacy name fallbacks — kept so any in-flight requests using old names still resolve
+  Tan: "TX3LPaxmHKxFdv7VOQHJ",
+  Lim: "JBFqnCBsd6RMkjVDRZzb",
+  Wong: "onwK4e9ZLuTAKqWW03F9",
 };
 
 const corsHeaders = {

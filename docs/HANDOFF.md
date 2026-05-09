@@ -26,7 +26,7 @@ The pitch: **"Most generative AI tries to please you. This one cries until you g
 | **Realtime partner** | ✅ live | Gemini Flash Live default, OpenAI Realtime swappable behind `VITE_REALTIME_PARTNER_PROVIDER`; 4 partner tools (`take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment`) wire back into game actions |
 | **Live baby SFX** (ElevenLabs `text_to_sound_v2`) | ✅ live | `/api/baby/sfx?trigger=hunger\|tired\|discomfort\|coo` — 49KB MP3 per request; not yet wired to AudioDirector preference |
 | **Live music** (Lyria-002 via Vertex AI) | ✅ live | `/api/music/probation-theme?vibe=intro\|argument\|verdict` — returns 6.3MB WAV; frontend still using pre-baked MP3 |
-| **3D officer muppet** | ✅ live | Three.js custom rig (lifted from `internal-rig`); per-officer voice profiles; ResizeObserver fix for hidden→visible mounts |
+| **3D officer muppet** | ✅ live | Three.js custom rig (Ernest/Bern/Crumb characters); per-officer voice profiles; ResizeObserver fix for hidden→visible mounts |
 | **Photo intake / Sing-mic / Verification / Cute payoff / Gacha debrief** | ✅ live | All UI surfaces shipping |
 | **Custom domain** | ✅ active | `babysim.berlayar.ai` via Workers Custom Domain (auto-route) |
 | **Pre-baked assets** | ✅ live | Older `gptimage2-fullbody-clean-face-rig-v1` baby PNGs, 4 partner archetype portraits, 3 officer expressions, Lyria 32s theme, 4 baby cry SFX, finger-snap |
@@ -48,7 +48,7 @@ The pitch: **"Most generative AI tries to please you. This one cries until you g
 | # | Task | Effort | Why |
 |---|---|---|---|
 | 1 | **Frontend wire `/api/baby/sfx` + `/api/music/probation-theme` into AudioDirector** | ~20 min | Lights up "every cry is freshly synthesized" + "music is regenerated per session" — instant visible dynamic upgrade |
-| 2 | **2.5D animated puppet rig port** (parts + face plates + limb pivots from `internal-pipeline/tools/.../viewer/viewer.js`) | ~1-2h | Static PNGs → actually animated baby. The `puppet.json` + `parts/` rig at `gptimage2-fullbody-clean-face-rig-v1/` already has the layered assets. The viewer.js is 3.4k lines but the relevant section is ~500 lines (look for `buildPuppet`, `applyPuppetExpression`, `triggerPuppetReaction`, `puppetActor.append`). Port to a `<PuppetCanvas>` React component, drive from `BabyVisualState` + `playerLastAction`. |
+| 2 | **2.5D animated baby puppet rig** ✅ done | Approach: layered-PNG compositing on a single `<canvas>` (Canvas2D `drawImage` in z-order). A `puppet.json` manifest defines an ordered layer set per `BabyVisualState` (face backplate + landmark-aligned eye/mouth overlays). The React component `src/baby-rig/PuppetCanvas.tsx` preloads all 14 PNGs once, then swaps the active layer set per state change with no remount. A `requestAnimationFrame` loop adds an idle vertical bob (`sin(t)*2px`, ~0.16Hz) and an eye-layer-substitution blink every 3-5s. A `setMouthOpen(0..1)` ref method is exposed for future audio-reactive lip-sync. Assets ship at `public/puppets/baby/`. |
 | 3 | **GM frontend wiring** | ~30 min | Call `/api/gm` at beat boundaries, dispatch its returned `DirectorCommand[]` through the existing reducer/runtime (which already validates). Makes beat transitions LLM-driven. |
 | 4 | **DurableObject multiplayer** (`GameSessionDO`) | ~1-2h | "Join a room" button currently throws an alert. Worker → DO with WebSocket, partner role can be a real second player. |
 | 5 | **Veo-3.1 cute payoff video** | ~1h | Endpoint stubbed with initiate/poll pattern; frontend needs the polling loop. CSS fallback already in place. |

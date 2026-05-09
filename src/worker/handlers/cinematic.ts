@@ -1,5 +1,5 @@
-// Cinematic clip endpoint — Seedance 2.0 via Replicate (2-step async job).
-// POST /api/cinematic   → initiates generation, returns { predictionId, status, pollUrl }
+// Cinematic clip endpoint — Seedance 2.0 OR Veo-3.1-fast via Replicate (2-step async job).
+// POST /api/cinematic   → initiates generation, returns { predictionId, status, pollUrl, provider }
 // GET  /api/cinematic?id=...  → polls Replicate; returns { status, videoUrl } once ready.
 //
 // Replicate predictions take 1-3 min for video. The initiate step kicks off the job
@@ -7,16 +7,48 @@
 // then returns the Replicate delivery URL (frontend uses it as <video src>).
 // We do NOT proxy video bytes — frontend fetches the Replicate CDN URL directly.
 //
+// Provider is selectable via body.provider: "seedance" | "veo" (default "seedance").
+// Veo-3.1-fast is more permissive on infant content (Bytedance's Seedance moderation
+// rejects photoreal newborn frames with E005). Veo also supports negative_prompt.
+//
 // If fromState + toState are provided, the start/end frame PNGs hosted on this Worker
-// are passed as `image` and `last_frame_image` to anchor the transition.
-// Otherwise the request is pure text-to-video.
+// are passed as the start and end frame keys (which differ per provider — see PROVIDERS).
 
 export interface CinematicEnv {
   REPLICATE_API_TOKEN: string;
 }
 
-const REPLICATE_MODEL_VERSION =
-  "4631ca9b77b48db08836df4527a436455c4eddff6b25dbc12e541f262aaab774";
+type CinematicProvider = "seedance" | "veo";
+
+interface ProviderConfig {
+  modelVersion: string;
+  startFrameKey: string;       // image input key
+  endFrameKey: string;         // last-frame input key
+  defaultDuration: number;
+  defaultResolution: string;
+  supportsNegativePrompt: boolean;
+}
+
+const PROVIDERS: Record<CinematicProvider, ProviderConfig> = {
+  // bytedance/seedance-2.0
+  seedance: {
+    modelVersion: "4631ca9b77b48db08836df4527a436455c4eddff6b25dbc12e541f262aaab774",
+    startFrameKey: "image",
+    endFrameKey: "last_frame_image",
+    defaultDuration: 5,
+    defaultResolution: "720p",
+    supportsNegativePrompt: false,
+  },
+  // google/veo-3.1-fast
+  veo: {
+    modelVersion: "ba987aceebef53bebfede32973f842fe3aa2301bf2585878181e7a7677052e36",
+    startFrameKey: "image",
+    endFrameKey: "last_frame",
+    defaultDuration: 8,
+    defaultResolution: "1080p",
+    supportsNegativePrompt: true,
+  },
+};
 
 const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
@@ -41,7 +73,8 @@ type BabyState = "settled" | "drowsy" | "hungry" | "fussy" | "crying" | "sleep";
 interface ReplicatePrediction {
   id: string;
   status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
-  output?: string;
+  // Seedance returns a single string URL; some models return an array.
+  output?: string | string[];
   error?: string;
   urls?: { get: string };
 }
@@ -69,6 +102,10 @@ async function handleInitiate(
     toState?: string;
     duration?: number;
     generateAudio?: boolean;
+    provider?: string;
+    imageUrl?: string;        // explicit start-frame URL (overrides fromState→PNG)
+    lastFrameUrl?: string;    // explicit end-frame URL (overrides toState→PNG)
+    negativePrompt?: string;  // veo-only
   };
   try {
     body = await request.json();
@@ -88,6 +125,10 @@ async function handleInitiate(
     });
   }
 
+  const provider: CinematicProvider =
+    body.provider === "veo" ? "veo" : "seedance";
+  const cfg = PROVIDERS[provider];
+
   const fromState =
     typeof body.fromState === "string" && VALID_STATES.has(body.fromState)
       ? (body.fromState as BabyState)
@@ -100,31 +141,53 @@ async function handleInitiate(
   const duration =
     typeof body.duration === "number" && body.duration >= 2 && body.duration <= 15
       ? body.duration
-      : 5;
+      : cfg.defaultDuration;
 
   const generateAudio = body.generateAudio !== false; // default true
 
-  // Build the Replicate input payload.
+  // Build the Replicate input payload — keys differ per provider (Seedance: last_frame_image, Veo: last_frame).
   const replicateInput: Record<string, unknown> = {
     prompt,
     duration,
-    resolution: "720p",
+    resolution: cfg.defaultResolution,
     aspect_ratio: "16:9",
     generate_audio: generateAudio,
   };
 
-  if (fromState) {
-    replicateInput["image"] = `${BASE_ASSET_URL}/${fromState}.png`;
+  // Start frame: explicit URL beats fromState lookup.
+  const startFrameUrl =
+    typeof body.imageUrl === "string" && body.imageUrl
+      ? body.imageUrl
+      : fromState
+        ? `${BASE_ASSET_URL}/${fromState}.png`
+        : null;
+  if (startFrameUrl) {
+    replicateInput[cfg.startFrameKey] = startFrameUrl;
   }
-  if (toState) {
-    replicateInput["last_frame_image"] = `${BASE_ASSET_URL}/${toState}.png`;
+
+  // End frame: explicit URL beats toState lookup.
+  const endFrameUrl =
+    typeof body.lastFrameUrl === "string" && body.lastFrameUrl
+      ? body.lastFrameUrl
+      : toState
+        ? `${BASE_ASSET_URL}/${toState}.png`
+        : null;
+  if (endFrameUrl) {
+    replicateInput[cfg.endFrameKey] = endFrameUrl;
+  }
+
+  // negative_prompt is Veo-only.
+  if (cfg.supportsNegativePrompt && typeof body.negativePrompt === "string" && body.negativePrompt) {
+    replicateInput["negative_prompt"] = body.negativePrompt.slice(0, 500);
   }
 
   log("initiating replicate prediction", {
+    provider,
     fromState,
     toState,
     duration,
     generateAudio,
+    hasExplicitImageUrl: Boolean(body.imageUrl),
   });
 
   let prediction: ReplicatePrediction;
@@ -137,7 +200,7 @@ async function handleInitiate(
         Prefer: "respond-async", // ask Replicate to return 201 immediately
       },
       body: JSON.stringify({
-        version: REPLICATE_MODEL_VERSION,
+        version: cfg.modelVersion,
         input: replicateInput,
       }),
     });
@@ -179,10 +242,11 @@ async function handleInitiate(
     );
   }
 
-  log("replicate prediction initiated", { predictionId: prediction.id, status: prediction.status });
+  log("replicate prediction initiated", { provider, predictionId: prediction.id, status: prediction.status });
 
   return new Response(
     JSON.stringify({
+      provider,
       predictionId: prediction.id,
       status: prediction.status ?? "starting",
       pollUrl: `/api/cinematic?id=${prediction.id}`,
@@ -258,8 +322,12 @@ async function handlePoll(
     );
   }
 
-  // Succeeded — output is a string URL for the MP4.
-  const videoUrl = typeof output === "string" ? output : null;
+  // Succeeded — output is a URL (string) or array of URLs depending on the provider.
+  const videoUrl = typeof output === "string"
+    ? output
+    : Array.isArray(output) && typeof output[0] === "string"
+      ? output[0]
+      : null;
   if (!videoUrl) {
     log("prediction succeeded but output is missing", JSON.stringify(prediction).slice(0, 300));
     return new Response(

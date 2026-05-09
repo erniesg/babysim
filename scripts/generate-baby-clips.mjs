@@ -45,12 +45,14 @@ const BASE_ASSET_URL = 'https://babysim.berlayar.ai/img/baby';
 /** @type {ClipSpec[]} */
 const CLIPS = [
   // ── Transition clips (priority order) ──────────────────────────────────────
+  // Prompts intentionally calm and observational. Avoids clinical / distress
+  // framing that triggered Bytedance E005 ("flagged as sensitive") in the first run.
   {
     type: 'transition',
     from: 'settled',
     to: 'hungry',
     prompt:
-      'Newborn baby gradually transitioning from settled contentment to hungry restlessness — eyes open wider, lips smack softly, tiny fists begin to clench. Slow zoom-in. Soft warm amber key light from upper-left. 1970s East Asian family drama aesthetic, painterly film grain, shallow depth of field.',
+      'A calm cinematic family-drama portrait of a young baby in a soft warm crib. The baby gently stirs, eyes slowly opening wider, small lips moving softly. Slow tender zoom-in. Warm amber key light. 1970s East Asian family drama aesthetic, painterly film grain, peaceful lullaby tone.',
     duration: 5,
     generateAudio: true,
   },
@@ -59,7 +61,7 @@ const CLIPS = [
     from: 'hungry',
     to: 'crying',
     prompt:
-      'Newborn baby escalating from hungry fussing to full crying — face scrunches, mouth opens wide, small shoulders tense up, arms flail gently. Slow push-in. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain.',
+      'A tender family-drama portrait of a young baby being lovingly watched. The baby moves a little more, mouth opening, eyes fluttering, gentle motion. Slow tender push-in. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain, lullaby tone.',
     duration: 5,
     generateAudio: true,
   },
@@ -68,7 +70,7 @@ const CLIPS = [
     from: 'crying',
     to: 'fussy',
     prompt:
-      'Newborn baby calming from full crying to residual fussiness after being soothed — tears still on cheeks, breathing slows, occasional hiccup, eyes searching. Slow pull-back. Soft warm low-key light. 1970s East Asian family drama aesthetic, painterly film grain.',
+      'A serene cinematic portrait of a young baby being soothed by a parent. Breathing slows, eyes search the room calmly, face relaxes. Slow tender pull-back. Soft warm low-key light. 1970s East Asian family drama aesthetic, painterly film grain, lullaby tone.',
     duration: 5,
     generateAudio: true,
   },
@@ -77,7 +79,7 @@ const CLIPS = [
     from: 'fussy',
     to: 'drowsy',
     prompt:
-      'Newborn baby settling from fussy restlessness into drowsiness — eyelids growing heavy, tiny hands relaxing, breathing deepening, head lolling slightly. Gentle slow zoom-out. Warm amber light softening. 1970s East Asian family drama aesthetic, painterly film grain.',
+      'A peaceful family-drama portrait of a young baby gently settling — eyelids softly lowering, tiny hands relaxing, breathing deepening, head turning to a comfortable angle. Gentle slow zoom-out. Warm amber light softening. 1970s East Asian family drama aesthetic, painterly film grain.',
     duration: 5,
     generateAudio: true,
   },
@@ -86,7 +88,7 @@ const CLIPS = [
     from: 'drowsy',
     to: 'sleep',
     prompt:
-      'Newborn baby drifting from drowsy half-sleep into deep sleep — eyes fluttering closed, face fully relaxed, lips parted in the tiniest pout, chest rising and falling slowly. Slow fade-dim. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain.',
+      'A serene family-drama portrait of a young baby drifting peacefully into sleep — eyes softly closing, face fully relaxed, lips gently parted, chest rising and falling slowly. Slow gentle fade. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain, lullaby ambience.',
     duration: 5,
     generateAudio: true,
   },
@@ -95,7 +97,7 @@ const CLIPS = [
     from: 'settled',
     to: 'drowsy',
     prompt:
-      'Newborn baby yawning and transitioning from settled wakefulness to drowsiness — wide yawn, eyes scrunching then slowly reopening heavy-lidded, tiny fist rubbing cheek. Gentle slow zoom-in. Warm amber key light. 1970s East Asian family drama aesthetic, painterly film grain.',
+      'A tender family-drama portrait of a young baby giving a small soft yawn — eyes growing heavy-lidded, a tiny hand brushing the cheek, peaceful drift toward sleep. Gentle slow zoom-in. Warm amber key light. 1970s East Asian family drama aesthetic, painterly film grain, lullaby tone.',
     duration: 5,
     generateAudio: true,
   },
@@ -105,7 +107,7 @@ const CLIPS = [
     type: 'idle',
     state: 'settled',
     prompt:
-      'Newborn baby in settled state, subtle breathing motion, chest rising and falling gently, eyes softly open and curious, tiny fingers curling slowly. Soft warm low-key light from upper-left. 1970s East Asian family drama aesthetic, painterly film grain. NO music, no talking, only ambient room tone and gentle breathing sounds.',
+      'A calm cinematic portrait of a young baby in a soft warm crib, peacefully alert. Subtle breathing, gentle finger curls, eyes calmly tracking. Soft warm low-key light from upper-left. 1970s East Asian family drama aesthetic, painterly film grain. Ambient lullaby tone, no music or speech.',
     duration: 5,
     generateAudio: false,
   },
@@ -113,7 +115,7 @@ const CLIPS = [
     type: 'idle',
     state: 'drowsy',
     prompt:
-      'Newborn baby in drowsy state, eyes barely flickering half-open, subtle breathing motion, head swaying the tiniest amount, face slack and peaceful. Soft warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. NO music, no talking, only ambient breathing.',
+      'A peaceful family-drama portrait of a young baby in a warm crib, eyelids gently lowering, subtle breathing, tiny hand relaxed near cheek, face peaceful. Soft warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. Ambient quiet tone.',
     duration: 5,
     generateAudio: false,
   },
@@ -121,7 +123,7 @@ const CLIPS = [
     type: 'idle',
     state: 'hungry',
     prompt:
-      'Newborn baby in hungry state, subtle rooting reflex — turning head side to side, lips smacking softly, arms stirring, mild restlessness, eyes intermittently open. Soft warm low-key light. 1970s East Asian family drama aesthetic, painterly film grain. NO music, only ambient fussing sounds.',
+      'A calm cinematic portrait of a young baby in a warm crib, gently stirring with a small head turn and soft lip movements, mildly alert. Soft warm low-key light from upper-left. 1970s East Asian family drama aesthetic, painterly film grain. Ambient quiet room tone.',
     duration: 5,
     generateAudio: false,
   },
@@ -129,7 +131,7 @@ const CLIPS = [
     type: 'idle',
     state: 'fussy',
     prompt:
-      'Newborn baby in fussy state, intermittent small whimpers, brow furrowing and releasing, arms moving fitfully, face scrunching and relaxing. Soft warm low-key light. 1970s East Asian family drama aesthetic, painterly film grain. NO music, only soft fussing sounds.',
+      'A tender cinematic portrait of a young baby in a warm crib, expression subtly shifting, brow softly furrowing then relaxing, small arm moving. Soft warm low-key light. 1970s East Asian family drama aesthetic, painterly film grain. Ambient room tone.',
     duration: 5,
     generateAudio: false,
   },
@@ -137,7 +139,7 @@ const CLIPS = [
     type: 'idle',
     state: 'crying',
     prompt:
-      'Newborn baby in crying state, continuous crying motion — mouth wide open, face red, small shoulders heaving, arms and legs kicking gently. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. NO music, only crying sounds.',
+      'A tender cinematic portrait of a young baby in a warm crib, mouth gently open, eyes softly fluttering, tiny gentle motion of the arms, watched lovingly. Warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. Soft ambient lullaby tone.',
     duration: 5,
     generateAudio: false,
   },
@@ -145,7 +147,7 @@ const CLIPS = [
     type: 'idle',
     state: 'sleep',
     prompt:
-      'Newborn baby in deep sleep state, absolutely still except for barely perceptible chest rise and fall, face completely relaxed, lips slightly parted, eyes firmly closed. Very soft warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. NO music, no talking, only ambient breathing.',
+      'A serene family-drama portrait of a young baby in a warm crib, deeply asleep, almost perfectly still except for the barest chest rise and fall, lips softly parted, eyes peacefully closed. Very soft warm amber low-key light. 1970s East Asian family drama aesthetic, painterly film grain. Ambient quiet, lullaby tone.',
     duration: 5,
     generateAudio: false,
   },

@@ -16,7 +16,7 @@ import { CutePayoff } from "./components/CutePayoff";
 import { SingMicCapture } from "./components/SingMicCapture";
 import { VerificationGames } from "./components/VerificationGames";
 import { AudioDirector } from "./audio/AudioDirector";
-import type { MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
+import type { MuppetCharacter, MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
 import { llmOfficerLine, isOfficerAgentEnabled } from "./llm/officer-agent";
 import { fetchOfficerVoiceUrl, isElevenLabsOfficerVoiceEnabled } from "./llm/officer-voice";
 import { callBabyAgent, isBabyAgentEnabled, isGameplayBeat } from "./llm/baby-agent";
@@ -35,27 +35,27 @@ function makeSeed() {
   return `seed-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function officerProfileFromName(name: string): OfficerVoiceProfile {
-  if (name.includes("Lim")) return "Lim";
-  if (name.includes("Wong")) return "Wong";
-  return "Tan";
+function officerProfileFromName(name: string): MuppetCharacter {
+  if (name.includes("Bern")) return "Bern";
+  if (name.includes("Crumb")) return "Crumb";
+  return "Ernest";
 }
 
 // Each officer carries a slightly distinct rhetorical voice; voices differentiated via
 // pitch/rate profile in muppet-engine. Swap to Gemini Flash voice (Live API) later.
-const OFFICER_INTROS: Record<OfficerVoiceProfile, (name: string) => string> = {
-  Tan: (n) =>
+const OFFICER_INTROS: Record<MuppetCharacter, (name: string) => string> = {
+  Ernest: (n) =>
     `Welcome to Probation. I am ${n}. Confirm you understand this is a rehearsal for chaos under supervision.`,
-  Lim: (n) =>
+  Bern: (n) =>
     `Sit. I am ${n}. We will simulate your unfitness, document your reactions, and rule on your readiness.`,
-  Wong: (n) =>
+  Crumb: (n) =>
     `${n}, intake desk. The Ministry has paired you with one tiny citizen and one slightly tired adult. Begin.`,
 };
 
-const OFFICER_WARNINGS: Record<OfficerVoiceProfile, string> = {
-  Tan: "Care labor, shirking, and night shifts will be recorded. The Ministry sees what you do at two oh seven in the morning.",
-  Lim: "We are not interested in your intentions. Only your distribution of responsibility, measured in minutes.",
-  Wong: "The fairness ledger updates in real time. Be candid; we are already auditing.",
+const OFFICER_WARNINGS: Record<MuppetCharacter, string> = {
+  Ernest: "Care labor, shirking, and night shifts will be recorded. The Ministry sees what you do at two oh seven in the morning.",
+  Bern: "We are not interested in your intentions. Only your distribution of responsibility, measured in minutes.",
+  Crumb: "The fairness ledger updates in real time. Be candid; we are already auditing.",
 };
 
 function officerLineFor(beatId: BeatId, state: GameState): { text: string; expression: MuppetExpression; gesture: MuppetGesture } {
@@ -65,7 +65,7 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
   if (beatId === "officer_intro") {
     return {
       text: OFFICER_INTROS[profile](officerName),
-      expression: profile === "Wong" ? "warm" : "strict",
+      expression: profile === "Crumb" ? "warm" : "strict",
       gesture: "stamp",
     };
   }
@@ -80,7 +80,7 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
     const { ledger } = state;
     if (ledger.playerShirks >= 3) {
       return {
-        text: profile === "Lim"
+        text: profile === "Bern"
           ? "The file shows theatrical breathing. We will reconvene when you are honest."
           : "The file shows theatrical breathing. Your application is held for further review.",
         expression: "skeptical",
@@ -89,7 +89,7 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
     }
     if (ledger.playerNightShifts >= 2 && ledger.playerSoothes >= 4) {
       return {
-        text: profile === "Wong"
+        text: profile === "Crumb"
           ? "Eyes ringed with policy. Quietly impressive. Provisional approval, on the record."
           : "Eyes ringed with policy. The Ministry recognizes service. Provisional approval.",
         expression: "delighted",
@@ -97,7 +97,7 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
       };
     }
     return {
-      text: profile === "Lim"
+      text: profile === "Bern"
         ? "Reviewable. Not yet alarming. Approval with reservations."
         : "Reviewable. Not yet alarming. Provisional approval, with notes.",
       expression: "warm",
@@ -469,8 +469,8 @@ function HomePanel({ onStart }: { onStart: () => void }) {
   return (
     <div className="home-panel">
       <img
-        src="/img/officer-tan.png"
-        alt="Officer Tan portrait"
+        src="/img/officer-ernest-strict.png"
+        alt="Officer Ernest portrait"
         className="officer-portrait"
         onError={(e) => {
           (e.currentTarget as HTMLImageElement).style.display = "none";

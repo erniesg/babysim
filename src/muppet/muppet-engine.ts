@@ -15,13 +15,26 @@ export type MuppetSayOptions = {
   audioUrl?: string;
 };
 
-export type OfficerVoiceProfile = "Tan" | "Lim" | "Wong";
+/**
+ * MuppetCharacter identifies which Sesame-inspired puppet civil servant is on stage.
+ * Ernest = Ernie-likeness (warm orange, mischievous), Bern = Bert-likeness (yellow, severe),
+ * Crumb = Cookie-Monster-likeness (deep blue, chaotic-friendly).
+ */
+export type MuppetCharacter = "Ernest" | "Bern" | "Crumb";
+
+/**
+ * Backward-compatible alias: callers that still pass "Tan"/"Lim"/"Wong" are mapped to the
+ * new character names at the setVoiceProfile call site so existing callers don't break.
+ */
+export type OfficerVoiceProfile = MuppetCharacter | "Tan" | "Lim" | "Wong";
 
 export type MuppetController = {
   say(opts: MuppetSayOptions): Promise<void>;
   setExpression(expression: MuppetExpression): void;
   playGesture(gesture: MuppetGesture): void;
+  /** @deprecated use setCharacter; legacy names "Tan"/"Lim"/"Wong" are remapped internally */
   setVoiceProfile(officer: OfficerVoiceProfile): void;
+  setCharacter(character: MuppetCharacter): void;
   panicStop(): void;
   unlockSpeech(): void;
   dispose(): void;
@@ -33,13 +46,104 @@ type VoicePrefs = {
   pitch: number;
 };
 
-const VOICE_PROFILES: Record<OfficerVoiceProfile, VoicePrefs> = {
-  // Tan: stern, deeper, slow — UK/Australian male timbre.
-  Tan: { voiceMatcher: /daniel|arthur|oliver|george/i, rate: 0.92, pitch: 0.78 },
-  // Lim: brisk, higher, slightly clipped — South-Asian or female enhanced voice.
-  Lim: { voiceMatcher: /rishi|samantha|karen|tessa|veena/i, rate: 1.04, pitch: 1.05 },
-  // Wong: warm, mid pitch, mid pace — generic enhanced fallback to differentiate.
-  Wong: { voiceMatcher: /alex|fred|moira|google.*us/i, rate: 0.98, pitch: 0.92 },
+/** Per-character visual config for geometry tweaks. */
+type CharacterVisualConfig = {
+  /** Hex color for the skin/fur material. */
+  skinColor: number;
+  /** Hex color for the hair cap. */
+  hairColor: number;
+  /**
+   * Scale multiplier applied to the eye group vertically — larger = rounder/more prominent eyes.
+   * Ernest: normal. Bern: slightly squinted. Crumb: wide, mounted high.
+   */
+  eyeScaleY: number;
+  /**
+   * Y offset of the eye groups from the default 0.42 position.
+   * Crumb's eyes ride high; Bern/Ernest stay near default.
+   */
+  eyeYOffset: number;
+  /**
+   * X spread of the eyes — Crumb's googly eyes ride wide.
+   */
+  eyeXSpread: number;
+  /** Head sphere X scale — 1.0 is round, <1.0 is narrow (Bern tall oval), >1.0 is wide. */
+  headScaleX: number;
+  /** Head sphere Y scale — Bern is elongated vertically. */
+  headScaleY: number;
+  /**
+   * Brow thickness scale for the brow bar geometry (BoxGeometry Y size multiplier).
+   * Bern has a heavy mono-brow; Ernest and Crumb are lighter.
+   */
+  browThickness: number;
+  /**
+   * Whether to merge the two brows into a single mono-brow geometry (Bern).
+   */
+  monoBrow: boolean;
+  /**
+   * Nose scale — Crumb has a rounder/larger nose.
+   */
+  noseScale: number;
+};
+
+const CHARACTER_VISUAL: Record<MuppetCharacter, CharacterVisualConfig> = {
+  // Ernest: Ernie-likeness — warm orange skin, round head, normal eyes, light brows, mischievous
+  Ernest: {
+    skinColor: 0xe87020,
+    hairColor: 0x20201c,
+    eyeScaleY: 1.0,
+    eyeYOffset: 0.0,
+    eyeXSpread: 0.39,
+    headScaleX: 1.0,
+    headScaleY: 1.0,
+    browThickness: 1.0,
+    monoBrow: false,
+    noseScale: 1.0,
+  },
+  // Bern: Bert-likeness — yellow skin, tall narrow oval head, heavy mono-brow, small eyes
+  Bern: {
+    skinColor: 0xd4c028,
+    hairColor: 0x20201c,
+    eyeScaleY: 0.78,
+    eyeYOffset: -0.04,
+    eyeXSpread: 0.33,
+    headScaleX: 0.82,
+    headScaleY: 1.22,
+    browThickness: 2.4,
+    monoBrow: true,
+    noseScale: 0.85,
+  },
+  // Crumb: Cookie-Monster-likeness — deep blue, round shaggy head, wide googly eyes mounted high
+  Crumb: {
+    skinColor: 0x1e4ac8,
+    hairColor: 0x0d2a8a,
+    eyeScaleY: 1.3,
+    eyeYOffset: 0.14,
+    eyeXSpread: 0.50,
+    headScaleX: 1.05,
+    headScaleY: 0.98,
+    browThickness: 0.7,
+    monoBrow: false,
+    noseScale: 1.3,
+  },
+};
+
+/** Map legacy Tan/Lim/Wong names to new character identities. */
+const LEGACY_TO_CHARACTER: Record<string, MuppetCharacter> = {
+  Tan: "Ernest",
+  Lim: "Bern",
+  Wong: "Crumb",
+  "Officer Tan": "Ernest",
+  "Officer Lim": "Bern",
+  "Officer Wong": "Crumb",
+};
+
+const VOICE_PROFILES: Record<MuppetCharacter, VoicePrefs> = {
+  // Ernest (Tan): playful mid-deep, mischievous — UK male timbre with a slight lilt
+  Ernest: { voiceMatcher: /daniel|arthur/i, rate: 0.95, pitch: 0.92 },
+  // Bern (Lim): stern, lower, slow — severe and humorless
+  Bern: { voiceMatcher: /oliver|george/i, rate: 0.88, pitch: 0.72 },
+  // Crumb (Wong): rumbling, chaotic-friendly — deep and slightly distracted
+  Crumb: { voiceMatcher: /fred|alex/i, rate: 0.85, pitch: 0.65 },
 };
 
 type ExpressionRig = {
@@ -54,6 +158,24 @@ const EXPRESSIONS: Record<MuppetExpression, ExpressionRig> = {
   warm: { browTilt: -0.08, browY: 0.05, eyeScaleY: 1.08, headTilt: 0.05 },
   skeptical: { browTilt: 0.38, browY: 0, eyeScaleY: 0.82, headTilt: 0.12 },
   delighted: { browTilt: -0.12, browY: 0.08, eyeScaleY: 1.22, headTilt: -0.08 },
+};
+
+/**
+ * Per-character expression overrides. Only keys that differ from the base EXPRESSIONS
+ * need to be listed; the engine merges them at setCharacter() time.
+ * - Bern's "warm" is still fairly stern — brow barely lifts.
+ * - Crumb's "strict" is more "distracted stare" than authority — head tilts sideways.
+ */
+const CHARACTER_EXPRESSIONS: Partial<Record<MuppetCharacter, Partial<Record<MuppetExpression, Partial<ExpressionRig>>>>> = {
+  Bern: {
+    warm: { browTilt: 0.12, browY: 0.01, eyeScaleY: 0.92, headTilt: 0.03 },
+    delighted: { browTilt: 0.04, browY: 0.04, eyeScaleY: 1.05, headTilt: -0.04 },
+  },
+  Crumb: {
+    strict: { browTilt: 0.14, browY: -0.01, eyeScaleY: 0.88, headTilt: 0.18 },
+    warm: { browTilt: -0.06, browY: 0.07, eyeScaleY: 1.18, headTilt: 0.12 },
+    delighted: { browTilt: -0.16, browY: 0.10, eyeScaleY: 1.35, headTilt: 0.22 },
+  },
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -101,7 +223,8 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   let fallbackSpeechTimer: ReturnType<typeof setTimeout> | null = null;
   let fallbackAudioContext: AudioContext | null = null;
   let activeSayResolver: (() => void) | null = null;
-  let voicePrefs: VoicePrefs = VOICE_PROFILES.Tan;
+  let voicePrefs: VoicePrefs = VOICE_PROFILES.Ernest;
+  let currentCharacter: MuppetCharacter = "Ernest";
 
   // Lighting
   scene.add(new THREE.HemisphereLight(0xf7dfbd, 0x25110d, 0.78));
@@ -262,6 +385,60 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   badge.position.set(-0.36, -1.08, 0.78);
   root.add(badge);
 
+  /**
+   * Apply per-character visual differentiation: head color, eye prominence,
+   * brow style, head shape. Uses geometry scale + material color tweaks only
+   * (no mesh swaps) so the existing rig stays intact.
+   */
+  function applyCharacterVisuals(character: MuppetCharacter) {
+    const cfg = CHARACTER_VISUAL[character];
+
+    // Skin color (upper + lower jaw halves + nose + arms/hands)
+    skinMat.color.setHex(cfg.skinColor);
+
+    // Hair cap color
+    hairMat.color.setHex(cfg.hairColor);
+
+    // Head shape: scale the upper and lower jaw spheres
+    upper.scale.set(cfg.headScaleX, cfg.headScaleY, 1.0);
+    lower.scale.set(cfg.headScaleX, cfg.headScaleY, 1.0);
+    nose.scale.set(0.9 * cfg.noseScale, 1.1 * cfg.noseScale, 1.2 * cfg.noseScale);
+
+    // Eye position: Y offset + X spread
+    leftEye.group.position.set(-cfg.eyeXSpread, 0.42 + cfg.eyeYOffset, 0.78);
+    rightEye.group.position.set(cfg.eyeXSpread, 0.42 + cfg.eyeYOffset, 0.78);
+    // Eye base scale (blink logic multiplies eyeScaleY on top of this)
+    leftEye.group.scale.set(1, cfg.eyeScaleY, 1);
+    rightEye.group.scale.set(1, cfg.eyeScaleY, 1);
+
+    if (cfg.monoBrow) {
+      // Mono-brow: hide left/right individual brows; use the right brow as a wide center bar.
+      leftBrow.visible = false;
+      rightBrow.visible = true;
+      rightBrow.position.set(0, 0.73, 0.84); // centered
+      (rightBrow.geometry as THREE.BoxGeometry).dispose();
+      // Re-create the geometry wide enough to span both eye positions
+      const wideGeo = new THREE.BoxGeometry(0.82, 0.065 * cfg.browThickness, 0.075);
+      (rightBrow as THREE.Mesh).geometry = wideGeo;
+      rightBrow.rotation.z = 0.06; // slight downward V angle
+    } else {
+      leftBrow.visible = true;
+      rightBrow.visible = true;
+      // Restore independent brow geometry (normal width)
+      (leftBrow.geometry as THREE.BoxGeometry).dispose();
+      (rightBrow.geometry as THREE.BoxGeometry).dispose();
+      (leftBrow as THREE.Mesh).geometry = new THREE.BoxGeometry(0.34, 0.065 * cfg.browThickness, 0.075);
+      (rightBrow as THREE.Mesh).geometry = new THREE.BoxGeometry(0.34, 0.065 * cfg.browThickness, 0.075);
+      leftBrow.position.set(-0.41, 0.73, 0.84);
+      rightBrow.position.set(0.41, 0.73, 0.84);
+      leftBrow.rotation.z = -0.18;
+      rightBrow.rotation.z = 0.18;
+    }
+  }
+
+  // Apply default character visuals on startup
+  applyCharacterVisuals("Ernest");
+
   function resize() {
     const rect = canvas.getBoundingClientRect();
     // When the canvas is in a display:none ancestor, getBoundingClientRect
@@ -413,8 +590,9 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   }
 
   function setExpression(expression: MuppetExpression) {
-    const next = EXPRESSIONS[expression] ?? EXPRESSIONS.strict;
-    state.expressionTarget = { ...next };
+    const base = EXPRESSIONS[expression] ?? EXPRESSIONS.strict;
+    const charOverride = CHARACTER_EXPRESSIONS[currentCharacter]?.[expression] ?? {};
+    state.expressionTarget = { ...base, ...charOverride };
   }
 
   function playGesture(gesture: MuppetGesture) {
@@ -441,8 +619,21 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
     );
   }
 
+  function resolveCharacter(officer: OfficerVoiceProfile): MuppetCharacter {
+    // Accept both new names (Ernest/Bern/Crumb) and legacy Tan/Lim/Wong
+    if (officer === "Ernest" || officer === "Bern" || officer === "Crumb") return officer;
+    return LEGACY_TO_CHARACTER[officer] ?? "Ernest";
+  }
+
+  function setCharacter(character: MuppetCharacter): void {
+    currentCharacter = character;
+    voicePrefs = VOICE_PROFILES[character] ?? VOICE_PROFILES.Ernest;
+    applyCharacterVisuals(character);
+  }
+
+  /** @deprecated Use setCharacter; legacy Tan/Lim/Wong names are remapped internally. */
   function setVoiceProfile(officer: OfficerVoiceProfile): void {
-    voicePrefs = VOICE_PROFILES[officer] ?? VOICE_PROFILES.Tan;
+    setCharacter(resolveCharacter(officer));
   }
 
   function stopSpeech() {
@@ -666,5 +857,5 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   resize();
   rafId = requestAnimationFrame(animate);
 
-  return { say, setExpression, playGesture, setVoiceProfile, panicStop, unlockSpeech, dispose };
+  return { say, setExpression, playGesture, setVoiceProfile, setCharacter, panicStop, unlockSpeech, dispose };
 }

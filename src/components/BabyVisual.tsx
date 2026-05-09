@@ -1,10 +1,10 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import type { BabyVisualState } from "@contracts/game-state";
+import { PuppetCanvas } from "../baby-rig/PuppetCanvas";
 import "./BabyVisual.css";
 
-// Photoreal 2.5D puppet from the internal-pipeline pipeline.
-// Pre-baked deterministic baseline; live generation will swap these in via
-// /api/baby/portrait once that endpoint lands.
+// Photoreal 2.5D layered puppet rig (canvas-composited) with video + PNG fallbacks.
+// Pre-baked deterministic baseline; live generation hits /api/baby/portrait.
 const STATE: Record<BabyVisualState, { url: string; label: string; bg: string }> = {
   settled: { url: "/img/baby/settled.png", label: "Settled", bg: "#1f2933" },
   drowsy:  { url: "/img/baby/drowsy.png",  label: "Drowsy",  bg: "#272235" },
@@ -20,10 +20,9 @@ type Props = {
   mood: number;
 };
 
-// Check whether a video path exists by attempting to load it.
-// Returns the path on success, null on 404 or any error.
-// Uses a HEAD request to avoid downloading the full file just for existence checking.
-async function videoExists(path: string): Promise<boolean> {
+// Check whether a URL is reachable by HEAD request.
+// Returns true when the server responds with a 2xx status.
+async function pathExists(path: string): Promise<boolean> {
   try {
     const res = await fetch(path, { method: "HEAD" });
     return res.ok;
@@ -32,9 +31,21 @@ async function videoExists(path: string): Promise<boolean> {
   }
 }
 
+const PUPPET_MANIFEST_URL = "/puppets/baby/puppet.json";
+const PUPPET_BASE_DIR = "/puppets/baby";
+
 export function BabyVisual({ visualState, name, mood }: Props) {
   const view = STATE[visualState];
   const animate = visualState === "crying" || visualState === "fussy";
+
+  // Puppet availability: probe once on mount.
+  // undefined = probing, true = puppet available, false = not available.
+  const [puppetAvailable, setPuppetAvailable] = useState<boolean | undefined>(
+    undefined
+  );
+  useEffect(() => {
+    void pathExists(PUPPET_MANIFEST_URL).then(setPuppetAvailable);
+  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -62,6 +73,9 @@ export function BabyVisual({ visualState, name, mood }: Props) {
 
     const idlePath = `/video/baby/${currentState}-idle.mp4`;
     const transitionPath = `/video/baby/${previousState}-to-${currentState}.mp4`;
+
+    // Puppet rig is available — no need to run video logic.
+    if (puppetAvailable === true) return;
 
     // Shows the video element, hides the img fallback.
     function showVideo(src: string, loop: boolean) {
@@ -91,14 +105,14 @@ export function BabyVisual({ visualState, name, mood }: Props) {
     void (async () => {
       // Skip the transition check when the state hasn't changed (initial mount).
       if (previousState !== currentState) {
-        const hasTransition = await videoExists(transitionPath);
+        const hasTransition = await pathExists(transitionPath);
         if (hasTransition) {
           showVideo(transitionPath, false);
           // When the transition finishes, chain into the idle loop.
           const onTransitionEnd = () => {
             videoEl!.removeEventListener("ended", onTransitionEnd);
             // State may have changed again while transition was playing.
-            void videoExists(idlePath).then((hasIdle) => {
+            void pathExists(idlePath).then((hasIdle) => {
               if (hasIdle) {
                 showVideo(idlePath, true);
               } else {
@@ -112,7 +126,7 @@ export function BabyVisual({ visualState, name, mood }: Props) {
       }
 
       // No transition clip (or initial mount): try idle loop directly.
-      const hasIdle = await videoExists(idlePath);
+      const hasIdle = await pathExists(idlePath);
       if (hasIdle) {
         showVideo(idlePath, true);
       } else {
@@ -120,7 +134,7 @@ export function BabyVisual({ visualState, name, mood }: Props) {
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visualState]);
+  }, [visualState, puppetAvailable]);
 
   return (
     <div
@@ -130,21 +144,43 @@ export function BabyVisual({ visualState, name, mood }: Props) {
       aria-label={`Baby ${name ?? ""} is ${view.label.toLowerCase()}`}
     >
       {/*
-        Single <video> element — src is swapped by the effect above.
-        Initially hidden; shown only when a video clip successfully loads.
-        autoPlay is set so the browser starts as soon as src is assigned via effect.
-        muted={false} so video-embedded baby audio plays (at volume 0.5, set on mount).
+        Render cascade: Puppet rig > video transition > static PNG.
+        puppetAvailable is undefined while the HEAD probe is in-flight;
+        we wait until it resolves before committing to puppet or video path
+        so we never flash the wrong layer.
       */}
-      <video
-        ref={videoRef}
-        autoPlay
-        muted={false}
-        playsInline
-        className="baby-photo"
-        style={{ display: "none" }}
-      />
-      {/* PNG fallback — always rendered so layout is stable; hidden when video is active. */}
-      <img ref={imgRef} src={view.url} alt="" className="baby-photo" />
+      {puppetAvailable === true ? (
+        /* ── Tier 1: 2.5D layered puppet rig ───────────────────────────── */
+        <div style={{ position: "absolute", inset: 0 }}>
+          <PuppetCanvas
+            visualState={visualState}
+            manifestUrl={PUPPET_MANIFEST_URL}
+            baseDir={PUPPET_BASE_DIR}
+          />
+        </div>
+      ) : puppetAvailable === false ? (
+        /* ── Tier 2: video transition + idle loop ───────────────────────── */
+        <>
+          {/*
+            Single <video> element — src is swapped by the effect above.
+            Initially hidden; shown only when a video clip successfully loads.
+            muted={false} so video-embedded baby audio plays (at volume 0.5).
+          */}
+          <video
+            ref={videoRef}
+            autoPlay
+            muted={false}
+            playsInline
+            className="baby-photo"
+            style={{ display: "none" }}
+          />
+          {/* Tier 3: PNG fallback — always rendered; hidden when video is active. */}
+          <img ref={imgRef} src={view.url} alt="" className="baby-photo" />
+        </>
+      ) : (
+        /* ── Probing (undefined): render PNG so layout is never empty ───── */
+        <img src={view.url} alt="" className="baby-photo" />
+      )}
       <div className="baby-meta">
         <span className="baby-name">{name || "your baby"}</span>
         <span className="baby-state">{view.label}</span>

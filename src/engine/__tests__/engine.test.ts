@@ -131,7 +131,7 @@ describe("seedRoll", () => {
 
   it("officer name is one of the three allowed names", () => {
     const { officer } = seedRoll("any-seed");
-    const allowed = ["Officer Tan", "Officer Lim", "Officer Wong"];
+    const allowed = ["Officer Ernest", "Officer Bern", "Officer Crumb"];
     expect(allowed).toContain(officer.name);
   });
 

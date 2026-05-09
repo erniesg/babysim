@@ -9,14 +9,11 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const ENV_PATH = path.join(REPO_ROOT, '.env');
 const OUT_DIR = path.join(REPO_ROOT, 'public', 'audio', 'baby');
 const TMP_DIR = path.join(REPO_ROOT, 'tmp', 'baby-sounds');
-const FALLBACK_DIR = path.resolve(
-  REPO_ROOT,
-  '..',
-  'internal-pipeline',
-  'artifacts',
-  'ai-baby-simulator',
-  'live-same-baby-pack-20260509',
-);
+// Optional fallback directory for pre-baked baby audio packs (out-of-tree).
+// Set BABY_SOUNDS_FALLBACK_DIR in the env if you have a local pre-baked pack to copy from.
+const FALLBACK_DIR = process.env.BABY_SOUNDS_FALLBACK_DIR
+  ? path.resolve(process.env.BABY_SOUNDS_FALLBACK_DIR)
+  : null;
 
 const GEMINI_TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 

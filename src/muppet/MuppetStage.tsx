@@ -7,6 +7,7 @@ export type MuppetStageHandle = {
   setExpression: MuppetController["setExpression"];
   playGesture: MuppetController["playGesture"];
   setVoiceProfile: MuppetController["setVoiceProfile"];
+  setCharacter: MuppetController["setCharacter"];
   panicStop: MuppetController["panicStop"];
   unlockSpeech: MuppetController["unlockSpeech"];
 };
@@ -17,7 +18,7 @@ type Props = {
 };
 
 export const MuppetStage = forwardRef<MuppetStageHandle, Props>(function MuppetStage(
-  { className, ariaLabel = "Officer Tan stage" },
+  { className, ariaLabel = "Officer stage" },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -40,6 +41,7 @@ export const MuppetStage = forwardRef<MuppetStageHandle, Props>(function MuppetS
       setExpression: (e) => controllerRef.current?.setExpression(e),
       playGesture: (g) => controllerRef.current?.playGesture(g),
       setVoiceProfile: (o) => controllerRef.current?.setVoiceProfile(o),
+      setCharacter: (c) => controllerRef.current?.setCharacter(c),
       panicStop: () => controllerRef.current?.panicStop(),
       unlockSpeech: () => controllerRef.current?.unlockSpeech(),
     }),

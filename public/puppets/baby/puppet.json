@@ -1,0 +1,312 @@
+{
+  "id": "gptimage2-fullbody-clean-face-rig-v1",
+  "layout": "full-frame-state-layers",
+  "canvas": {
+    "width": 1024,
+    "height": 1024
+  },
+  "sourceReference": "coherent generated baby source, cleaned facial apertures, same-baby generated expression frames aligned by landmarks into authored eye/mouth slots",
+  "honestStatus": "clean-face authored-layer rig candidate: source body, skin edge, clothing, and nose are preserved as a clean backplate; eyes and mouth are separate landmark-aligned full-frame PNG slots with authored draw order; crying uses split mouth aperture/rim sublayers. This is a Rive/Live2D/Spine-style asset structure, not an exported Rive, Live2D, Spine, 3D, or lip-sync rig. Visual QA is still required, especially crying mouth anatomy.",
+  "parts": [
+    {
+      "name": "face_backplate",
+      "file": "layers/face_backplate.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "backplate"
+    },
+    {
+      "name": "eyes_settled",
+      "file": "layers/eyes_settled.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_settled",
+      "file": "layers/mouth_settled.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth"
+    },
+    {
+      "name": "eyes_drowsy",
+      "file": "layers/eyes_drowsy.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_drowsy",
+      "file": "layers/mouth_drowsy.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth"
+    },
+    {
+      "name": "eyes_hungry",
+      "file": "layers/eyes_hungry.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_hungry",
+      "file": "layers/mouth_hungry.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth"
+    },
+    {
+      "name": "eyes_fussy",
+      "file": "layers/eyes_fussy.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_fussy",
+      "file": "layers/mouth_fussy.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth"
+    },
+    {
+      "name": "eyes_crying",
+      "file": "layers/eyes_crying.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_crying_inner",
+      "file": "layers/mouth_crying_inner.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth_inner"
+    },
+    {
+      "name": "mouth_crying_rim",
+      "file": "layers/mouth_crying_rim.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth_rim"
+    },
+    {
+      "name": "eyes_sleep",
+      "file": "layers/eyes_sleep.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "eye"
+    },
+    {
+      "name": "mouth_sleep",
+      "file": "layers/mouth_sleep.png",
+      "width": 1024,
+      "height": 1024,
+      "group": "mouth"
+    }
+  ],
+  "layers": [
+    {
+      "name": "face_backplate",
+      "file": "layers/face_backplate.png",
+      "group": "backplate",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_settled",
+      "file": "layers/eyes_settled.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_settled",
+      "file": "layers/mouth_settled.png",
+      "group": "mouth",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_drowsy",
+      "file": "layers/eyes_drowsy.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_drowsy",
+      "file": "layers/mouth_drowsy.png",
+      "group": "mouth",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_hungry",
+      "file": "layers/eyes_hungry.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_hungry",
+      "file": "layers/mouth_hungry.png",
+      "group": "mouth",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_fussy",
+      "file": "layers/eyes_fussy.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_fussy",
+      "file": "layers/mouth_fussy.png",
+      "group": "mouth",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_crying",
+      "file": "layers/eyes_crying.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_crying_inner",
+      "file": "layers/mouth_crying_inner.png",
+      "group": "mouth_inner",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_crying_rim",
+      "file": "layers/mouth_crying_rim.png",
+      "group": "mouth_rim",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "eyes_sleep",
+      "file": "layers/eyes_sleep.png",
+      "group": "eye",
+      "layout": "fullFrame"
+    },
+    {
+      "name": "mouth_sleep",
+      "file": "layers/mouth_sleep.png",
+      "group": "mouth",
+      "layout": "fullFrame"
+    }
+  ],
+  "expressions": {
+    "settled": {
+      "layers": [
+        "face_backplate",
+        "eyes_settled",
+        "mouth_settled"
+      ],
+      "eyeLayer": "eyes_settled",
+      "mouthLayer": "mouth_settled",
+      "mouthLayers": [
+        "mouth_settled"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye/mouth slots"
+    },
+    "drowsy": {
+      "layers": [
+        "face_backplate",
+        "eyes_drowsy",
+        "mouth_drowsy"
+      ],
+      "eyeLayer": "eyes_drowsy",
+      "mouthLayer": "mouth_drowsy",
+      "mouthLayers": [
+        "mouth_drowsy"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye/mouth slots"
+    },
+    "hungry": {
+      "layers": [
+        "face_backplate",
+        "eyes_hungry",
+        "mouth_hungry"
+      ],
+      "eyeLayer": "eyes_hungry",
+      "mouthLayer": "mouth_hungry",
+      "mouthLayers": [
+        "mouth_hungry"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye/mouth slots"
+    },
+    "fussy": {
+      "layers": [
+        "face_backplate",
+        "eyes_fussy",
+        "mouth_fussy"
+      ],
+      "eyeLayer": "eyes_fussy",
+      "mouthLayer": "mouth_fussy",
+      "mouthLayers": [
+        "mouth_fussy"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye/mouth slots"
+    },
+    "crying": {
+      "layers": [
+        "face_backplate",
+        "eyes_crying",
+        "mouth_crying_inner",
+        "mouth_crying_rim"
+      ],
+      "eyeLayer": "eyes_crying",
+      "mouthLayer": "mouth_crying_rim",
+      "mouthLayers": [
+        "mouth_crying_inner",
+        "mouth_crying_rim"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye slot and split crying mouth aperture/rim sublayers"
+    },
+    "sleep": {
+      "layers": [
+        "face_backplate",
+        "eyes_sleep",
+        "mouth_sleep"
+      ],
+      "eyeLayer": "eyes_sleep",
+      "mouthLayer": "mouth_sleep",
+      "mouthLayers": [
+        "mouth_sleep"
+      ],
+      "tears": false,
+      "authoring": "source backplate plus landmark-aligned eye/mouth slots"
+    }
+  },
+  "metadata": {
+    "createdAt": "2026-05-07T15:55:07.146307+00:00",
+    "expressionFrameMode": "clean-face-authored-layer-rig",
+    "alignment": "hello-face-landmark-222pt-affine-ransac",
+    "segmentationMode": "tight landmark-derived clean face apertures plus authored color-matched eye/mouth slots",
+    "blendMode": "transparent PNG layer draw order over inpainted source backplate; overlays LAB-matched to the clean backplate skin sample",
+    "baseLandmarkProbability": 0.97656,
+    "baseLandmarkCrop": [
+      359,
+      69,
+      647,
+      357
+    ],
+    "baseFace": [
+      407,
+      117,
+      192,
+      192
+    ],
+    "rigSpec": "rig-spec.json",
+    "notes": [
+      "The nose is not replaced by expression frames.",
+      "The clean face is an occlusion backplate, not a generic blank-face identity reset.",
+      "Eye and mouth masks are intentionally tight to avoid cheek, bridge-of-nose, and lower-nose complexion patches.",
+      "The crying mouth is split into inner dark aperture and lip/rim layers for independent QA.",
+      "Layer slots are authored for later Rive/Live2D/Spine automation, but this output is still PNG state layers."
+    ]
+  }
+}

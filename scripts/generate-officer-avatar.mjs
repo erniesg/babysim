@@ -9,32 +9,59 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const ENV_PATH = path.join(REPO_ROOT, '.env');
 const OUT_DIR = path.join(REPO_ROOT, 'public', 'img');
 
-const BASE_PROMPT = [
-  'Stylized 1970s East Asian government drama portrait of "Officer Tan", a 50-year-old Singaporean/Malaysian civil servant.',
+// Shared cinematic framing used by all three character prompts
+const SHARED_FRAMING = [
   'Wardrobe: dark navy government uniform with a small gold lapel badge, crisp collar, narrow tie.',
   'Setting: dim crimson velvet curtain backdrop with soft folds; a wooden government desk in the lower-third foreground holds a brass desk stamp; faint gold accents catch light.',
   'Lighting: single dramatic key light from upper-left, deep falloff into shadow on the right side; warm undertones, slightly desaturated palette.',
-  'Style: cinematic, dignified, faintly menacing, light film grain, painterly photographic feel, shallow depth of field.',
+  'Style: cinematic, dignified, faintly menacing, light film grain, painterly photographic feel, shallow depth of field. Photorealistic puppet with felt/fur textures and visible stitching — not cartoon.',
   'Composition: tight head-and-shoulders, square 1:1 framing, subject roughly centered, eyes just past camera as if reviewing a file.',
+  'No text, no watermarks, no overlaid graphics.',
 ].join(' ');
 
-const VARIANTS = [
-  {
-    name: 'officer-tan',
-    expression:
-      'strict and slightly skeptical expression, mouth a flat line, brow faintly furrowed, gaze just past camera as if reviewing a confidential file.',
-  },
-  {
-    name: 'officer-tan-strict',
-    expression:
-      'severely strict and disapproving expression, jaw set, brow lowered, eyes narrowed and locked just past camera, lips pressed thin.',
-  },
-  {
-    name: 'officer-tan-warm',
-    expression:
-      'subtly warm but still formal expression, faint suppressed half-smile, eyes slightly softened, head tilted a hair toward camera, dignified.',
-  },
-];
+// Per-character base prompts — Sesame-Street-inspired puppet civil servants in government uniform
+const CHARACTER_BASE_PROMPTS = {
+  Ernest: [
+    'Stylized 1970s Singaporean government-drama portrait of "Officer Ernest", a colorful hand-puppet character in an official role.',
+    'Ernest is a whimsical fabric puppet with a round head, large oval eyes with prominent black pupils, warm orange felt/fur tone, and a half-smile.',
+    'He is dressed in a dark navy government uniform with a narrow tie and small gold lapel badge.',
+    SHARED_FRAMING,
+  ].join(' '),
+  Bern: [
+    'Stylized 1970s Singaporean government-drama portrait of "Officer Bern", a colorful hand-puppet character in an official role.',
+    'Bern is a whimsical fabric puppet with a tall oval head, a heavy mono-brow, yellow felt/fur tone, a serious set to his mouth, and a formal bearing.',
+    'He is dressed in a dark navy government uniform with a narrow tie and small gold lapel badge.',
+    SHARED_FRAMING,
+  ].join(' '),
+  Crumb: [
+    'Stylized 1970s Singaporean government-drama portrait of "Officer Crumb", a colorful hand-puppet character in an official role.',
+    'Crumb is a whimsical fabric puppet with a shaggy round head, wide-set eyes mounted high on the face, deep-blue fuzzy felt texture, and an earnest expression.',
+    'He is dressed in a dark navy government uniform with a slightly rumpled narrow tie and small gold lapel badge.',
+    SHARED_FRAMING,
+  ].join(' '),
+};
+
+const EXPRESSION_DESCRIPTORS = {
+  strict:
+    'formal and authoritative expression, brow lowered, eyes focused just past camera, lips pressed together, the composed look of a seasoned administrator.',
+  warm:
+    'subtly warm but still formal expression, faint suppressed half-smile, eyes slightly softened, head tilted a hair toward camera, dignified.',
+  skeptical:
+    'thoughtful and slightly skeptical expression, mouth a flat line, brow faintly furrowed, gaze just past camera as if carefully reviewing a document.',
+  delighted:
+    'rare controlled satisfaction — a pleased upturn at one corner of the mouth, eyes just brightened enough to notice, the look of a decision made.',
+};
+
+const CHARACTERS = ['Ernest', 'Bern', 'Crumb'];
+const EXPRESSIONS = ['strict', 'warm', 'skeptical', 'delighted'];
+
+const VARIANTS = CHARACTERS.flatMap((char) =>
+  EXPRESSIONS.map((expr) => ({
+    name: `officer-${char.toLowerCase()}-${expr}`,
+    character: char,
+    expression: expr,
+  })),
+);
 
 async function loadDotenv(filePath) {
   try {
@@ -111,8 +138,94 @@ async function fileExists(p) {
   }
 }
 
-function buildPrompt(expression) {
-  return `${BASE_PROMPT} Expression: ${expression}`;
+function buildPrompt(character, expression) {
+  const base = CHARACTER_BASE_PROMPTS[character] ?? CHARACTER_BASE_PROMPTS.Ernest;
+  return `${base} Expression: ${EXPRESSION_DESCRIPTORS[expression]}`;
+}
+
+async function generateReplicateImage({ prompt, outPath }) {
+  const apiKey = process.env.REPLICATE_API_TOKEN;
+  if (!apiKey) throw new Error('REPLICATE_API_TOKEN missing');
+
+  const REPLICATE_VERSION = '9ea921ca3eea597fe8773474545f54601fe1d30bc62517fb30fd86f42e4bb3cf';
+  const REPLICATE_PREDICTIONS_URL = 'https://api.replicate.com/v1/predictions';
+
+  const resp = await fetch(REPLICATE_PREDICTIONS_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'wait=60',
+    },
+    body: JSON.stringify({
+      version: REPLICATE_VERSION,
+      input: {
+        prompt,
+        aspect_ratio: '1:1',
+        quality: 'auto',
+        output_format: 'png',
+      },
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`replicate ${resp.status}: ${errText.slice(0, 500)}`);
+  }
+
+  let prediction = await resp.json();
+
+  // Poll if not yet succeeded
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (prediction.status === 'succeeded' || prediction.status === 'failed' || prediction.status === 'canceled') break;
+    await new Promise((r) => setTimeout(r, 6000));
+    const pollResp = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    });
+    if (pollResp.ok) prediction = await pollResp.json();
+  }
+
+  if (prediction.status !== 'succeeded' || !prediction.output?.length) {
+    throw new Error(`replicate prediction failed: ${prediction.error ?? prediction.status}`);
+  }
+
+  const imgResp = await fetch(prediction.output[0]);
+  if (!imgResp.ok) throw new Error(`image fetch failed: ${imgResp.status}`);
+  const buf = Buffer.from(await imgResp.arrayBuffer());
+  await fs.writeFile(outPath, buf);
+  return { bytes: buf.length, model: 'replicate/gpt-image-2' };
+}
+
+async function generateOpenAIImage({ prompt, outPath }) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY missing');
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-image-1',
+      prompt,
+      n: 1,
+      size: '1024x1024',
+      quality: 'high',
+      output_format: 'png',
+      background: 'opaque',
+    }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`openai ${response.status}: ${text.slice(0, 500)}`);
+  }
+  const json = await response.json();
+  const item = (json.data || [])[0];
+  const base64 = item?.b64_json || item?.b64Json || item?.image_base64;
+  if (!base64) throw new Error('openai: response missing base64 image');
+  const buf = Buffer.from(base64, 'base64');
+  await fs.writeFile(outPath, buf);
+  return { bytes: buf.length, model: 'gpt-image-1' };
 }
 
 async function generateGeminiImage({ prompt, outPath }) {
@@ -121,7 +234,6 @@ async function generateGeminiImage({ prompt, outPath }) {
 
   const candidates = [
     'gemini-3-pro-image-preview',
-    'gemini-3-image-preview',
     'gemini-2.5-flash-image-preview',
     'gemini-2.0-flash-preview-image-generation',
   ];
@@ -162,78 +274,12 @@ async function generateGeminiImage({ prompt, outPath }) {
       lastError = err;
     }
   }
-
-  const imagenModels = ['imagen-4.0-generate-001', 'imagen-3.0-generate-002'];
-  for (const model of imagenModels) {
-    try {
-      const url = new URL(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`,
-      );
-      url.searchParams.set('key', apiKey);
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt }],
-          parameters: { sampleCount: 1, aspectRatio: '1:1' },
-        }),
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        lastError = new Error(`imagen ${model} ${response.status}: ${text.slice(0, 400)}`);
-        continue;
-      }
-      const json = await response.json();
-      const pred = json?.predictions?.[0];
-      const base64 = pred?.bytesBase64Encoded || pred?.image?.imageBytes;
-      if (!base64) {
-        lastError = new Error(`imagen ${model}: response missing image`);
-        continue;
-      }
-      const buf = Buffer.from(base64, 'base64');
-      await fs.writeFile(outPath, buf);
-      return { bytes: buf.length, model };
-    } catch (err) {
-      lastError = err;
-    }
-  }
-
   throw lastError || new Error('All Gemini image attempts failed');
 }
 
-async function generateOpenAIImage({ prompt, outPath }) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY missing');
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-image-1',
-      prompt,
-      n: 1,
-      size: '1024x1024',
-      quality: 'high',
-      output_format: 'png',
-      background: 'opaque',
-    }),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`openai ${response.status}: ${text.slice(0, 500)}`);
-  }
-  const json = await response.json();
-  const item = (json.data || [])[0];
-  const base64 = item?.b64_json || item?.b64Json || item?.image_base64;
-  if (!base64) throw new Error('openai: response missing base64 image');
-  const buf = Buffer.from(base64, 'base64');
-  await fs.writeFile(outPath, buf);
-  return { bytes: buf.length, model: 'gpt-image-1' };
-}
-
-function svgFallback() {
+function svgFallback(character, expression) {
+  const colors = { Ernest: '#e87020', Bern: '#d4c028', Crumb: '#1e4ac8' };
+  const color = colors[character] ?? '#c9b7e8';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
@@ -250,50 +296,22 @@ function svgFallback() {
       <stop offset="0%" stop-color="#162033"/>
       <stop offset="100%" stop-color="#0a0f1c"/>
     </linearGradient>
-    <linearGradient id="skin" x1="0" x2="0" y1="0" y2="1">
-      <stop offset="0%" stop-color="#caa07a"/>
-      <stop offset="100%" stop-color="#7a5a40"/>
-    </linearGradient>
-    <radialGradient id="badge" cx="50%" cy="40%" r="55%">
-      <stop offset="0%" stop-color="#fff0b8"/>
-      <stop offset="60%" stop-color="#c8962a"/>
-      <stop offset="100%" stop-color="#5a3e0e"/>
-    </radialGradient>
   </defs>
   <rect width="1024" height="1024" fill="url(#bg)"/>
   <rect width="1024" height="1024" fill="url(#key)"/>
-  <g opacity="0.18" stroke="#000" stroke-width="1">
-    <path d="M40 0 V1024" /><path d="M180 0 V1024" /><path d="M340 0 V1024" />
-    <path d="M520 0 V1024" /><path d="M700 0 V1024" /><path d="M860 0 V1024" />
-  </g>
   <rect x="0" y="780" width="1024" height="244" fill="#3a2410"/>
-  <rect x="0" y="780" width="1024" height="14" fill="#5a3a1a"/>
-  <g transform="translate(760 820)">
-    <rect x="0" y="0" width="120" height="80" rx="6" fill="#3a2a14" stroke="#1a1208" stroke-width="2"/>
-    <rect x="44" y="-50" width="32" height="56" fill="#7a5a2a" stroke="#1a1208" stroke-width="2"/>
-    <circle cx="60" cy="-60" r="14" fill="#caa64a" stroke="#3a2a14" stroke-width="2"/>
-  </g>
   <ellipse cx="512" cy="900" rx="360" ry="180" fill="url(#uniform)"/>
   <path d="M380 760 L512 700 L644 760 L644 1024 L380 1024 Z" fill="url(#uniform)"/>
-  <path d="M488 700 L512 760 L536 700 L520 820 L504 820 Z" fill="#0a0a14" stroke="#222" stroke-width="1"/>
-  <circle cx="430" cy="780" r="14" fill="url(#badge)"/>
-  <ellipse cx="512" cy="540" rx="170" ry="210" fill="url(#skin)"/>
-  <ellipse cx="512" cy="700" rx="100" ry="50" fill="url(#skin)"/>
-  <path d="M362 460 Q512 320 662 460 Q662 380 512 340 Q362 380 362 460 Z" fill="#1a1a22"/>
-  <ellipse cx="455" cy="540" rx="22" ry="10" fill="#1a1208"/>
-  <ellipse cx="569" cy="540" rx="22" ry="10" fill="#1a1208"/>
-  <path d="M430 510 Q455 495 480 510" stroke="#0a0a08" stroke-width="6" fill="none" stroke-linecap="round"/>
-  <path d="M544 510 Q569 495 594 510" stroke="#0a0a08" stroke-width="6" fill="none" stroke-linecap="round"/>
-  <path d="M462 645 Q512 655 562 645" stroke="#3a1a14" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="512" cy="540" rx="170" ry="210" fill="${color}"/>
   <rect width="1024" height="1024" fill="url(#key)" opacity="0.4"/>
   <g font-family="Georgia, serif" fill="#caa64a" opacity="0.65">
-    <text x="80" y="980" font-size="28" letter-spacing="6">OFFICER  TAN</text>
+    <text x="80" y="980" font-size="28" letter-spacing="6">OFFICER  ${character.toUpperCase()}  · ${expression.toUpperCase()}</text>
   </g>
 </svg>`;
 }
 
-async function generateSvgFallback({ outPath }) {
-  const svg = svgFallback();
+async function generateSvgFallback({ character, expression, outPath }) {
+  const svg = svgFallback(character, expression);
   const svgPath = outPath.replace(/\.png$/, '.svg');
   await fs.writeFile(svgPath, svg, 'utf8');
   await fs.writeFile(outPath, svg, 'utf8');
@@ -308,18 +326,20 @@ async function generateOne({ variant, force }) {
     return { name: variant.name, status: 'skipped', provider: 'existing', bytes: stat.size, outPath };
   }
 
-  const prompt = buildPrompt(variant.expression);
+  const prompt = buildPrompt(variant.character, variant.expression);
   const errors = [];
 
+  // Primary: Replicate gpt-image-2
   try {
-    const r = await generateGeminiImage({ prompt, outPath });
+    const r = await generateReplicateImage({ prompt, outPath });
     const norm = await ensurePng(outPath).catch((e) => ({ transcoded: false, format: 'unknown', error: e.message }));
     const stat = await fs.stat(outPath);
-    return { name: variant.name, status: 'ok', provider: `gemini:${r.model}`, bytes: stat.size, outPath, errors, normalized: norm };
+    return { name: variant.name, status: 'ok', provider: `replicate:${r.model}`, bytes: stat.size, outPath, errors, normalized: norm };
   } catch (err) {
-    errors.push(`gemini: ${err.message}`);
+    errors.push(`replicate: ${err.message}`);
   }
 
+  // Fallback 1: OpenAI gpt-image-1
   try {
     const r = await generateOpenAIImage({ prompt, outPath });
     const norm = await ensurePng(outPath).catch((e) => ({ transcoded: false, format: 'unknown', error: e.message }));
@@ -329,8 +349,19 @@ async function generateOne({ variant, force }) {
     errors.push(`openai: ${err.message}`);
   }
 
+  // Fallback 2: Gemini
   try {
-    const r = await generateSvgFallback({ outPath });
+    const r = await generateGeminiImage({ prompt, outPath });
+    const norm = await ensurePng(outPath).catch((e) => ({ transcoded: false, format: 'unknown', error: e.message }));
+    const stat = await fs.stat(outPath);
+    return { name: variant.name, status: 'ok', provider: `gemini:${r.model}`, bytes: stat.size, outPath, errors, normalized: norm };
+  } catch (err) {
+    errors.push(`gemini: ${err.message}`);
+  }
+
+  // Last resort: SVG placeholder
+  try {
+    const r = await generateSvgFallback({ character: variant.character, expression: variant.expression, outPath });
     return {
       name: variant.name,
       status: 'ok',
@@ -349,14 +380,18 @@ async function generateOne({ variant, force }) {
 async function main() {
   const args = process.argv.slice(2);
   const force = args.includes('--force');
-  const onlyCanonical = args.includes('--canonical-only');
 
+  // Try to load from project .env first, then fallback to aether .env.local
   await loadDotenv(ENV_PATH);
+  if (!process.env.REPLICATE_API_TOKEN) {
+    await loadDotenv(path.join(path.dirname(REPO_ROOT), 'aether', '.env.local'));
+  }
+
   await ensureDir(OUT_DIR);
 
-  const targets = onlyCanonical ? VARIANTS.slice(0, 1) : VARIANTS;
+  console.log(`Generating ${VARIANTS.length} officer avatars (3 characters × 4 expressions)...`);
   const results = [];
-  for (const variant of targets) {
+  for (const variant of VARIANTS) {
     process.stdout.write(`Generating ${variant.name}.png ... `);
     const result = await generateOne({ variant, force });
     if (result.status === 'ok') {
@@ -373,7 +408,7 @@ async function main() {
   for (const r of results) {
     const tag = r.status === 'ok' ? r.provider : r.status;
     console.log(
-      `  ${r.name.padEnd(22)} ${tag.padEnd(28)} ${r.bytes ?? 0} bytes${r.warning ? `  [${r.warning}]` : ''}`,
+      `  ${r.name.padEnd(32)} ${tag.padEnd(30)} ${r.bytes ?? 0} bytes${r.warning ? `  [${r.warning}]` : ''}`,
     );
     if (r.errors && r.errors.length && r.status !== 'failed') {
       for (const e of r.errors) console.log(`    note: ${e}`);

@@ -144,7 +144,7 @@ babysim/
 │  │   └─ __tests__/          76 vitest tests
 │  ├─ realtime/               Gemini Live + OpenAI Realtime adapters behind one interface
 │  ├─ llm/                    Officer agent (browser → Worker)
-│  ├─ muppet/                 Three.js Officer Tan, refactored from internal-rig
+│  ├─ muppet/                 Three.js officer puppet rig (Ernest/Bern/Crumb characters)
 │  ├─ audio/                  AudioDirector — channel-keyed playback, music + SFX one-shots
 │  ├─ components/             BabyVisual, NeedsPanel, LedgerPanel, ActionBar, DebriefCard,
 │  │                           PhotoIntake, SingMicCapture, VerificationGames,
@@ -193,6 +193,10 @@ echo "$KEY" | npx wrangler secret put ELEVENLABS_API_KEY
 
 Custom domain `babysim.berlayar.ai` is registered as a Workers Custom Domain — Cloudflare auto-routes the hostname to the Worker via a special "Worker" DNS record (no manual CNAME needed once attached).
 
+## Baby puppet rig
+
+The animated baby is a 2.5D layered-PNG puppet composited on a single `<canvas>`. `public/puppets/baby/puppet.json` declares one ordered layer set per `BabyVisualState` — typically a clean face backplate plus landmark-aligned eye + mouth overlays. `src/baby-rig/PuppetCanvas.tsx` preloads every PNG once, then on each state change calls `ctx.drawImage` for the new layer set in z-order without remounting. A `requestAnimationFrame` loop drives an idle vertical bob (~0.16 Hz) and an eye-layer blink every 3–5 s. A `setMouthOpen(open: number)` ref method is exposed for future audio-reactive lip-sync. The component degrades gracefully: if `puppet.json` 404s, `BabyVisual` falls through to `<video>` state-transition clips, then to the static PNG.
+
 ## Build philosophy
 
 1. **The fully dynamic game is the product.** Every officer line, baby reaction, partner argument, asset, and beat decision is intended to come from a generative provider — gpt-5.5 / Gemini Flash Live / OpenAI Realtime / ElevenLabs / Lyria / Veo. The deterministic implementations exist as testing harnesses and graceful-degradation fallbacks when a model is slow, rate-limited, or unreachable.
@@ -216,6 +220,4 @@ See [`AGENTS.md`](AGENTS.md) for the full non-negotiables list.
 
 ## Credits
 
-- Officer Tan muppet rig from [`internal-rig`](../internal-rig/) — 1.7k lines of Three.js scene + expression rig + gesture rig + mock-Gemini tool loop, lifted as `src/muppet/`.
-- Photoreal baby puppet pipeline + canonical 6-state preview pack from [`internal-pipeline`](../internal-pipeline/).
-- Original [`parent`](../parent/) IVF/fertility-clinic finder is the parent project; BabySim is a hackathon-spun simulator atop the same rigging pipeline.
+Built as a hackathon multi-agent improv simulator on Cloudflare Workers, with gpt-5.5, Gemini Flash Live, OpenAI Realtime, ElevenLabs, Lyria-002, Seedance 2.0, Veo-3.1-fast, and Replicate's `openai/gpt-image-2`.
