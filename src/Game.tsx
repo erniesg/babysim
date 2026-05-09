@@ -638,6 +638,23 @@ export function Game() {
   }, [render?.beatId, render?.partner.visible, state]);
 
 
+  // ── Baby cry-channel intensity tracks visualState ─────────────────────────
+  // Modulates the baby audio channel's volume with the rig: settled silent,
+  // crying near full, sleep silent. AudioDirector fades over ~240ms so this
+  // breathes in lockstep with the photo-state crossfade.
+  useEffect(() => {
+    if (!render) return;
+    const INTENSITY: Record<import("@contracts/game-state").BabyVisualState, number> = {
+      settled: 0.0,
+      drowsy:  0.10,
+      hungry:  0.40,
+      fussy:   0.55,
+      crying:  0.85,
+      sleep:   0.0,
+    };
+    audioRef.current?.setIntensity("baby", INTENSITY[render.baby.visualState] ?? 0.5);
+  }, [render?.baby.visualState]);
+
   // ── Baby agent BEAT_ENTERED trigger ───────────────────────────────────────
   // Calls the baby agent once whenever the game enters a gameplay beat.
   // Throttled to one call per beat (lastAgentBeatRef) to prevent LLM spam.

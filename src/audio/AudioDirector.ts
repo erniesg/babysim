@@ -66,6 +66,29 @@ export class AudioDirector {
   // loop fires play_audio every game-hour while the cry persists).
   private playing: Partial<Record<Channel, { assetId: string; loop: boolean }>> = {};
 
+  // Per-channel intensity multiplier (0..1) on top of the channel's baseline
+  // volume. Used to drive cry-channel loudness from BabyVisualState — settled
+  // -> 0, fussy -> 0.55, crying -> 0.85 — so the audio breathes with the rig.
+  private intensities: Partial<Record<Channel, number>> = {
+    baby: 1,
+    partner: 1,
+    officer: 1,
+    ambient: 1,
+  };
+
+  // Set the channel's intensity multiplier and fade any active element on
+  // that channel toward its new effective target volume over ~240 ms.
+  // Called from Game.tsx when render.baby.visualState changes.
+  setIntensity(channel: Channel, level: number): void {
+    const clamped = Math.max(0, Math.min(1, level));
+    this.intensities[channel] = clamped;
+    const el = this.elements[channel];
+    if (el) {
+      const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+      this.fadeTo(el, baseline * clamped, 240);
+    }
+  }
+
   private fadeTo(el: HTMLAudioElement, target: number, durMs: number, onDone?: () => void) {
     const start = performance.now();
     const startVol = el.volume;
@@ -92,7 +115,9 @@ export class AudioDirector {
     const url = await this.resolveUrl(assetId);
     if (!url) return;
 
-    const targetVol = CHANNEL_VOLUME[channel] ?? 0.6;
+    const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+    const intensity = this.intensities[channel] ?? 1;
+    const targetVol = baseline * intensity;
 
     // Fade-out any current element on this channel (don't cut abruptly).
     const prev = this.elements[channel];
