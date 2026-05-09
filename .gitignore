@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+
+# Cloudflare local state
+.wrangler/
+.dev.vars
+.mf/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Generated/binary media placeholders
+assets/**/*.png
+assets/**/*.jpg
+assets/**/*.jpeg
+assets/**/*.webp
+assets/**/*.gif
+assets/**/*.mp3
+assets/**/*.wav
+assets/**/*.m4a
+assets/**/*.ogg
+assets/**/*.mp4
+assets/**/*.webm
+assets/**/*.mov
+
+# OS/editor
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
