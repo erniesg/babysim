@@ -1,8 +1,10 @@
 .muppet-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  min-height: 280px;
+  /* Big — the muppet is the camera. Drives ~80vh on a desktop screen so the
+   * chest-badge logos read clearly from across the room. min/max clamp keep
+   * it sane on tiny phones + ultrawide monitors. */
+  min-height: clamp(420px, 80vh, 960px);
   border-radius: 16px;
   overflow: hidden;
   background: radial-gradient(circle at 50% 30%, #2a1410 0%, #0c0606 70%);
@@ -13,9 +15,8 @@
  * challenge UI without dominating the layout. Instant change (no transition)
  * to avoid mid-resize WebGL frames showing only a thin strip of the muppet. */
 .muppet-stage.compact {
-  aspect-ratio: 16 / 6;
-  min-height: 180px;
-  max-height: 240px;
+  min-height: 220px;
+  max-height: 30vh;
 }
 
 .muppet-canvas {
@@ -24,4 +25,12 @@
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* The muppet wrap (parent of .muppet-stage) escapes the 1100px app-shell
+ * cap and goes near-full-viewport. Combined with the 80vh stage, this is
+ * the "muppet fills the screen" mode. */
+.muppet-stage-wrap {
+  width: min(96vw, 1600px);
+  margin-left: calc(min(0px, (100% - min(96vw, 1600px)) / 2));
 }

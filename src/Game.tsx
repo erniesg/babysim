@@ -277,10 +277,19 @@ export function Game() {
       // generation in the background. Lyria takes 20-60 s — by the time the
       // snap fires (~3 s after splash) the cached blob is partway baked. Falls
       // back silently to /audio/music/probation-theme.mp3 if the call fails.
-      // Also anchor the 90 s game deadline timer.
       if (action === "start_game") {
+        // Kick off the music prefetch + start playing the pre-baked fallback
+        // immediately so the player hears something the moment they commit.
+        // The Lyria live blob (if available) takes over silently when ready.
         void audioRef.current?.prefetch("music.probation_theme");
-        gameStartedAtRef.current = performance.now();
+        audioRef.current?.handle({
+          type: "play_audio",
+          channel: "ambient",
+          assetId: "music.probation_theme",
+          loop: true,
+        });
+        // 90 s game deadline anchor moved to baby_arrival entry — the
+        // cinematic intro + verification + reveal shouldn't eat the budget.
       }
 
       if (action === "sing") {
@@ -523,11 +532,18 @@ export function Game() {
     }
   }, [render?.beatId, state, send, executeOfficerTool]);
 
-  // ── 90 s game deadline ─────────────────────────────────────────────────────
-  // Once the player has started a game, force a verdict at the 90 s mark
-  // regardless of beat. The hard deadline keeps every demo playthrough
-  // bounded and guarantees a Ministry ruling on the file. Idempotent —
-  // skipping to a beat we're already in is a no-op via runtime.skipTo.
+  // ── 90 s gameplay deadline ─────────────────────────────────────────────────
+  // The deadline starts the moment the baby first arrives on stage — not at
+  // start_game. The cinematic intro + verification + reveal are pre-game
+  // theatre and shouldn't eat the budget; the player needs the full 90 s of
+  // actual newborn-care for the file to read fairly at verdict.
+  useEffect(() => {
+    if (!render || !state) return;
+    if (render.beatId === "baby_arrival" && gameStartedAtRef.current === null) {
+      gameStartedAtRef.current = performance.now();
+    }
+  }, [render?.beatId, state]);
+
   useEffect(() => {
     if (!render || !state) return;
     if (gameStartedAtRef.current === null) return;

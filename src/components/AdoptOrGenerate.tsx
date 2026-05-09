@@ -42,9 +42,8 @@ export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoo
       <div className="adopt-generate-prompt">
         <span className="kicker">{officerName}</span>
         <p className="adopt-generate-quote">
-          "Two paths. The Ministry will assign one of our wards
-          {" "}— the gacha pool — or generate a child algorithmically from
-          your intake photo. Decide now."
+          "Two paths. Adopt a Ministry ward from the pool, or generate a
+          child algorithmically from your intake photo. Decide now."
         </p>
       </div>
 

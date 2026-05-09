@@ -525,8 +525,10 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
     camera.updateProjectionMatrix();
     const compact = width < 700;
     const narrow = width >= 700 && width < 980;
-    state.rootBaseX = compact ? 0 : narrow ? 0.18 : 0.35;
-    state.rootScale = compact ? 0.66 : narrow ? 0.68 : 0.72;
+    // Center the muppet and scale up so chest-badge logos read clearly. The
+    // off-center composition (older default) left dead space at 80vh stage.
+    state.rootBaseX = 0;
+    state.rootScale = compact ? 0.95 : narrow ? 1.05 : 1.15;
   }
 
   function onPointerMove(event: PointerEvent) {
