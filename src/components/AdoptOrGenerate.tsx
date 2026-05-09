@@ -23,16 +23,9 @@ type Props = {
 };
 
 // Pool of pre-generated rigs — each is a directory under /puppets/ with a
-// puppet.json manifest. Two layouts coexist:
-//   - "full-frame-state-layers": canonical 14-layer landmark-aligned rig
-//   - "full-frame-photo-states":  one full-frame photo per BabyVisualState
+// puppet.json manifest. Single rig today: full-frame photo-state cycle
+// (settled / drowsy / hungry / fussy / crying / sleep).
 const ADOPT_RIG_POOL: Array<{ id: string; preview: string; manifest: string; baseDir: string }> = [
-  {
-    id: "ward-001",
-    preview: "/puppets/baby/layers/face_backplate.png",
-    manifest: "/puppets/baby/puppet.json",
-    baseDir: "/puppets/baby",
-  },
   {
     id: "ward-photoreal-v1",
     preview: "/puppets/baby-photoreal-v1/states/settled.png",

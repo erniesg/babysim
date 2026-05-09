@@ -33,8 +33,8 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-const DEFAULT_PUPPET_MANIFEST_URL = "/puppets/baby/puppet.json";
-const DEFAULT_PUPPET_BASE_DIR = "/puppets/baby";
+const DEFAULT_PUPPET_MANIFEST_URL = "/puppets/baby-photoreal-v1/puppet.json";
+const DEFAULT_PUPPET_BASE_DIR = "/puppets/baby-photoreal-v1";
 
 export function BabyVisual({ visualState, name, mood, rigManifestUrl, rigBaseDir }: Props) {
   const view = STATE[visualState];
