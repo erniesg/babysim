@@ -140,8 +140,10 @@ export async function officerAvatarHandler(request: Request, env: OfficerAvatarE
 
   log("prediction initial status", { id: prediction.id, status: prediction.status });
 
-  // If still processing after Prefer: wait, do one poll after 5s (Workers cap ~30s wall-clock).
-  if (prediction.status === "processing" || prediction.status === "starting") {
+  // If still processing after Prefer: wait=60, poll up to 5 more times at 5s intervals
+  // (gpt-image-2 cold-start can take 60s+; Workers wall-clock is unbounded while waiting on subrequests).
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (prediction.status === "succeeded" || prediction.status === "failed" || prediction.status === "canceled") break;
     await new Promise((resolve) => setTimeout(resolve, 5000));
     try {
       const pollResp = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
@@ -149,7 +151,7 @@ export async function officerAvatarHandler(request: Request, env: OfficerAvatarE
       });
       if (pollResp.ok) {
         prediction = await pollResp.json() as ReplicatePrediction;
-        log("poll status", { id: prediction.id, status: prediction.status });
+        log("poll", { attempt, id: prediction.id, status: prediction.status });
       }
     } catch (err) {
       log("poll threw", err instanceof Error ? err.message : String(err));
