@@ -1,14 +1,36 @@
 {
   "name": "babysim",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
-  "description": "Planning and contracts for the BabySim hackathon demo.",
+  "description": "Seeded, beat-driven newborn-care simulator. Hackathon demo build.",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy": "npm run build && wrangler deploy",
+    "tail": "wrangler tail",
+    "gen:baby-sounds": "node scripts/generate-baby-sounds.mjs",
+    "gen:officer-avatar": "node scripts/generate-officer-avatar.mjs",
+    "gen:partner-avatars": "node scripts/generate-partner-avatar.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.169.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0"
+    "@cloudflare/workers-types": "^4.20260509.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.169.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4",
+    "wrangler": "^4.90.0"
   }
 }
-

@@ -1,0 +1,1181 @@
+const QUESTIONS = {
+  consent: {
+    line: "Applicant, confirm you understand this is not medical advice. It is a rehearsal for chaos under supervision.",
+    expression: "strict",
+    gesture: "stamp",
+  },
+  night_shift: {
+    line: "At two oh seven in the morning, the tiny citizen will file a loud complaint. Who gets up first?",
+    expression: "skeptical",
+    gesture: "lean",
+  },
+  support: {
+    line: "List one person you can call before you become a tragic parenting monologue.",
+    expression: "warm",
+    gesture: "nod",
+  },
+  panic: {
+    line: "When everything is loud, your official plan is pause, breathe, and keep the baby safe.",
+    expression: "warm",
+    gesture: "wave",
+  },
+};
+
+const EXPRESSIONS = {
+  strict: {
+    browTilt: 0.28,
+    browY: -0.03,
+    eyeScaleY: 0.72,
+    headTilt: -0.02,
+  },
+  warm: {
+    browTilt: -0.08,
+    browY: 0.05,
+    eyeScaleY: 1.08,
+    headTilt: 0.05,
+  },
+  skeptical: {
+    browTilt: 0.38,
+    browY: 0,
+    eyeScaleY: 0.82,
+    headTilt: 0.12,
+  },
+  delighted: {
+    browTilt: -0.12,
+    browY: 0.08,
+    eyeScaleY: 1.22,
+    headTilt: -0.08,
+  },
+};
+
+const state = {
+  selectedQuestion: "consent",
+  speechUnlocked: false,
+  speaking: false,
+  speakingTime: 0,
+  mouthOpen: 0,
+  mouthPeak: 0,
+  expression: { ...EXPRESSIONS.strict },
+  expressionTarget: { ...EXPRESSIONS.strict },
+  gazeX: 0,
+  gazeY: 0,
+  blinkTimer: 1.6,
+  blinkPhase: -1,
+  gesture: null,
+  gestureTime: 0,
+  rootBaseX: 0.35,
+  rootScale: 1,
+  listening: false,
+  listenFailed: false,
+  awaitingResponse: false,
+  responseRetryCount: 0,
+  lastRecognitionError: "",
+  ignoreRecognitionEnd: false,
+  autoListenAfterSpeech: false,
+  renderFrames: [],
+  micStream: null,
+  micAnimation: null,
+};
+
+const el = {
+  canvas: document.getElementById("muppetCanvas"),
+  currentLine: document.getElementById("currentLine"),
+  fpsBadge: document.getElementById("fpsBadge"),
+  speechBadge: document.getElementById("speechBadge"),
+  micBadge: document.getElementById("micBadge"),
+  toolLog: document.getElementById("toolLog"),
+  stageSpeakBtn: document.getElementById("stageSpeakBtn"),
+  stageListenBtn: document.getElementById("stageListenBtn"),
+  speakBtn: document.getElementById("speakBtn"),
+  mockGeminiBtn: document.getElementById("mockGeminiBtn"),
+  listenBtn: document.getElementById("listenBtn"),
+  transcriptLine: document.getElementById("transcriptLine"),
+  micBtn: document.getElementById("micBtn"),
+  micLevel: document.getElementById("micLevel"),
+  panicBtn: document.getElementById("panicBtn"),
+  drillResult: document.getElementById("drillResult"),
+};
+
+let scene;
+let camera;
+let renderer;
+let root;
+let headGroup;
+let upperJaw;
+let lowerJaw;
+let leftEye;
+let rightEye;
+let leftPupil;
+let rightPupil;
+let leftBrow;
+let rightBrow;
+let leftShoulder;
+let rightShoulder;
+let deskStamp;
+let puppetSpotlight;
+let puppetSpotTarget;
+let lastTime = performance.now();
+let recognition = null;
+let finalTranscript = "";
+let currentUtterance = null;
+let speechEndTimer = null;
+let fallbackSpeechTimer = null;
+let fallbackAudioContext = null;
+let speechToken = 0;
+
+function assertThree() {
+  if (window.THREE) return true;
+  el.currentLine.textContent = "Three.js failed to load. Keep the tool contract and cut to the 2D fallback.";
+  return false;
+}
+
+function init() {
+  if (!assertThree()) return;
+
+  if ("scrollRestoration" in history) {
+    history.scrollRestoration = "manual";
+  }
+  window.scrollTo(0, 0);
+
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x120808, 10, 28);
+
+  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.set(0, 1.25, 10.5);
+
+  renderer = new THREE.WebGLRenderer({
+    canvas: el.canvas,
+    antialias: true,
+    alpha: true,
+  });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  buildLighting();
+  buildStage();
+  buildMuppet();
+  initSpeechSystem();
+  bindEvents();
+  resize();
+  requestAnimationFrame(animate);
+  logTool("stage_render", { ok: true });
+}
+
+function buildLighting() {
+  scene.add(new THREE.HemisphereLight(0xf7dfbd, 0x25110d, 0.78));
+
+  const key = new THREE.SpotLight(0xffd39b, 4.4, 24, Math.PI / 4, 0.64, 1.15);
+  key.position.set(-4, 6.4, 5.8);
+  scene.add(key);
+
+  puppetSpotTarget = new THREE.Object3D();
+  puppetSpotTarget.position.set(state.rootBaseX, -0.1, 1.2);
+  scene.add(puppetSpotTarget);
+
+  puppetSpotlight = new THREE.SpotLight(0xffe1aa, 12, 19, Math.PI / 8.5, 0.36, 0.82);
+  puppetSpotlight.position.set(2.4, 7.4, 6.1);
+  puppetSpotlight.target = puppetSpotTarget;
+  scene.add(puppetSpotlight);
+
+  const rim = new THREE.PointLight(0x40b7a5, 4.2, 16);
+  rim.position.set(6.2, 3.2, 3.3);
+  scene.add(rim);
+
+}
+
+function buildStage() {
+  const redMat = new THREE.MeshStandardMaterial({ color: 0x7f171c, roughness: 0.78 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xd5a84e, metalness: 0.25, roughness: 0.36 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x4c2317, roughness: 0.82 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x160a07, roughness: 0.95 });
+
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(22, 14), darkMat);
+  back.position.set(0, 0, -3.6);
+  scene.add(back);
+
+  const valance = new THREE.Mesh(new THREE.BoxGeometry(18, 1.2, 0.35), redMat);
+  valance.position.set(0, 5.5, -1.3);
+  scene.add(valance);
+
+  for (const x of [-7.7, 7.7]) {
+    const curtain = new THREE.Mesh(new THREE.BoxGeometry(2.2, 9, 0.25), redMat);
+    curtain.position.set(x, 1.2, -1.2);
+    scene.add(curtain);
+
+    const rope = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.045, 8, 24), goldMat);
+    rope.position.set(x * 0.96, 0.25, -0.98);
+    rope.scale.x = 0.72;
+    scene.add(rope);
+  }
+
+  const topTrim = new THREE.Mesh(new THREE.BoxGeometry(18.4, 0.16, 0.28), goldMat);
+  topTrim.position.set(0, 4.86, -0.96);
+  scene.add(topTrim);
+
+  const desk = new THREE.Mesh(new THREE.BoxGeometry(8.3, 1.45, 1.25), woodMat);
+  desk.position.set(0, -2.62, 1.35);
+  scene.add(desk);
+
+  const deskFront = new THREE.Mesh(new THREE.BoxGeometry(8.55, 0.28, 1.32), goldMat);
+  deskFront.position.set(0, -1.92, 1.43);
+  scene.add(deskFront);
+
+  deskStamp = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 0.32, 24), goldMat);
+  deskStamp.position.set(2.7, -1.66, 2.02);
+  scene.add(deskStamp);
+}
+
+function buildMuppet() {
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xc9b7e8, roughness: 0.82 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: 0x25384d, roughness: 0.78 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: 0x20201c, roughness: 0.72 });
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0xfff7ec, roughness: 0.38 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x140c09, roughness: 0.6 });
+  const mouthMat = new THREE.MeshStandardMaterial({ color: 0x360a16, roughness: 0.7 });
+  const tongueMat = new THREE.MeshStandardMaterial({ color: 0xcc6677, roughness: 0.72 });
+
+  root = new THREE.Group();
+  root.position.set(0, -0.85, 1.2);
+  scene.add(root);
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.78, 1.15, 8, 22), shirtMat);
+  torso.position.set(0, -1.36, 0);
+  root.add(torso);
+
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.055, 8, 28), shirtMat);
+  collar.position.set(0, -0.71, 0.08);
+  collar.rotation.x = Math.PI / 2;
+  root.add(collar);
+
+  headGroup = new THREE.Group();
+  headGroup.position.set(0, 0.28, 0);
+  root.add(headGroup);
+
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.88, 24, 16), mouthMat);
+  mouth.scale.set(0.9, 0.55, 0.75);
+  mouth.position.set(0, -0.1, 0.08);
+  headGroup.add(mouth);
+
+  upperJaw = new THREE.Group();
+  lowerJaw = new THREE.Group();
+  headGroup.add(upperJaw);
+  headGroup.add(lowerJaw);
+
+  const upper = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 40, 22, 0, Math.PI * 2, 0, Math.PI / 2),
+    skinMat,
+  );
+  upperJaw.add(upper);
+
+  const lower = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 40, 22, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+    skinMat,
+  );
+  lowerJaw.add(lower);
+
+  const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 12), tongueMat);
+  tongue.scale.set(1.05, 0.18, 0.75);
+  tongue.position.set(0, -0.38, 0.15);
+  lowerJaw.add(tongue);
+
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(1.04, 36, 14, 0, Math.PI * 2, 0, Math.PI / 3),
+    hairMat,
+  );
+  hair.position.y = 0.03;
+  upperJaw.add(hair);
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.14, 18, 12), skinMat);
+  nose.position.set(0, 0.1, 0.98);
+  nose.scale.set(0.9, 1.1, 1.2);
+  upperJaw.add(nose);
+
+  leftEye = makeEye(-1, eyeMat, darkMat);
+  rightEye = makeEye(1, eyeMat, darkMat);
+  upperJaw.add(leftEye.group, rightEye.group);
+  leftPupil = leftEye.pupil;
+  rightPupil = rightEye.pupil;
+  leftBrow = makeBrow(-1, darkMat);
+  rightBrow = makeBrow(1, darkMat);
+  upperJaw.add(leftBrow, rightBrow);
+
+  leftShoulder = makeArm(-1, shirtMat, skinMat);
+  rightShoulder = makeArm(1, shirtMat, skinMat);
+  root.add(leftShoulder, rightShoulder);
+
+  const badge = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.24, 0.04), new THREE.MeshStandardMaterial({ color: 0xd5a84e, roughness: 0.35 }));
+  badge.position.set(-0.36, -1.08, 0.78);
+  root.add(badge);
+}
+
+function makeEye(side, eyeMat, darkMat) {
+  const group = new THREE.Group();
+  group.position.set(side * 0.39, 0.42, 0.78);
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.23, 22, 16), eyeMat);
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.095, 14, 10), darkMat);
+  pupil.position.set(0, 0, 0.17);
+  group.add(eye, pupil);
+  return { group, eye, pupil };
+}
+
+function makeBrow(side, mat) {
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.065, 0.075), mat);
+  brow.position.set(side * 0.41, 0.73, 0.84);
+  brow.rotation.z = side * -0.18;
+  return brow;
+}
+
+function makeArm(side, shirtMat, skinMat) {
+  const shoulder = new THREE.Group();
+  shoulder.position.set(side * 0.72, -1.05, 0.02);
+  shoulder.rotation.z = side * 0.24;
+
+  const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.17, 0.62, 6, 14), shirtMat);
+  upper.position.y = -0.48;
+  shoulder.add(upper);
+
+  const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.55, 6, 14), skinMat);
+  lower.position.set(side * 0.06, -1.02, 0.02);
+  shoulder.add(lower);
+
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.19, 16, 12), skinMat);
+  hand.position.set(side * 0.08, -1.38, 0.08);
+  shoulder.add(hand);
+
+  return shoulder;
+}
+
+function bindEvents() {
+  window.addEventListener("resize", resize);
+
+  window.addEventListener("pointermove", (event) => {
+    const x = event.clientX / window.innerWidth;
+    const y = event.clientY / window.innerHeight;
+    state.gazeX = (x - 0.5) * 2;
+    state.gazeY = (y - 0.5) * 2;
+  });
+
+  window.addEventListener("pointerdown", unlockSpeech, { capture: true });
+  window.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      panicStop();
+    }
+  });
+
+  document.querySelectorAll(".question").forEach((button) => {
+    button.addEventListener("click", () => {
+      const questionId = button.dataset.question;
+      selectQuestion(questionId);
+      runTool({ name: "ask_intake_question", args: { questionId: button.dataset.question } });
+      runTool({ name: "say", args: { ...QUESTIONS[questionId], listenAfter: true } });
+    });
+  });
+
+  el.stageSpeakBtn.addEventListener("click", speakSelectedQuestion);
+  el.stageListenBtn.addEventListener("click", () => startListening({ responseWindow: true }));
+  el.speakBtn.addEventListener("click", () => {
+    speakSelectedQuestion();
+  });
+
+  el.mockGeminiBtn.addEventListener("click", () => {
+    const turn = mockGeminiTurn();
+    turn.forEach(runTool);
+    completeGate("tool_loop", true, "Mock turn executed");
+  });
+
+  el.listenBtn.addEventListener("click", startListening);
+  el.micBtn.addEventListener("click", runMicCheck);
+  el.panicBtn.addEventListener("click", panicStop);
+
+  document.querySelectorAll("[data-drill]").forEach((button) => {
+    button.addEventListener("click", () => runDrill(button.dataset.drill));
+  });
+}
+
+function resize() {
+  const rect = el.canvas.getBoundingClientRect();
+  const width = Math.max(1, rect.width);
+  const height = Math.max(1, rect.height);
+  renderer.setSize(width, height, false);
+  camera.aspect = width / height;
+  camera.position.z = width < 700 ? 12 : 10.5;
+  camera.updateProjectionMatrix();
+
+  const compact = width < 700;
+  const narrow = width >= 700 && width < 980;
+  state.rootBaseX = compact ? 0 : narrow ? 0.18 : 0.35;
+  state.rootScale = compact ? 0.66 : narrow ? 0.68 : 0.72;
+}
+
+function animate(now) {
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt, now);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+
+function update(dt, now) {
+  trackFps(now);
+
+  const k = 1 - Math.exp(-dt / 0.24);
+  for (const key of Object.keys(state.expression)) {
+    state.expression[key] += (state.expressionTarget[key] - state.expression[key]) * k;
+  }
+
+  state.speakingTime += dt;
+  const speechTarget = state.speaking ? 1 : 0;
+  const pulse = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(state.speakingTime * Math.PI * 8.5));
+  state.mouthOpen += (speechTarget * pulse - state.mouthOpen) * (1 - Math.exp(-dt / 0.08));
+  state.mouthPeak = Math.max(state.mouthPeak, state.mouthOpen);
+
+  lowerJaw.rotation.x = state.mouthOpen * 0.84;
+  upperJaw.rotation.x = -state.mouthOpen * 0.22;
+
+  const gx = clamp(state.gazeX, -1, 1);
+  const gy = clamp(state.gazeY, -1, 1);
+  headGroup.rotation.y = gx * 0.42;
+  headGroup.rotation.x = -gy * 0.24 + state.mouthOpen * 0.03;
+  headGroup.rotation.z = state.expression.headTilt;
+
+  leftPupil.position.x = gx * 0.045;
+  rightPupil.position.x = gx * 0.045;
+  leftPupil.position.y = -gy * 0.04;
+  rightPupil.position.y = -gy * 0.04;
+
+  updateBlink(dt);
+  updateExpression();
+  updateGesture(dt);
+
+  root.position.x = state.rootBaseX;
+  root.scale.setScalar(state.rootScale);
+  root.rotation.z = Math.sin(now * 0.0013) * 0.025 + state.expression.headTilt * 0.3;
+  root.position.y = -0.85 + Math.sin(now * 0.0018) * 0.035;
+
+  if (puppetSpotTarget) {
+    puppetSpotTarget.position.set(state.rootBaseX, -0.05, 1.2);
+  }
+  if (puppetSpotlight) {
+    puppetSpotlight.position.x = state.rootBaseX - 2.1;
+  }
+}
+
+function updateBlink(dt) {
+  state.blinkTimer -= dt;
+  let blinkScale = 1;
+  if (state.blinkPhase >= 0) {
+    state.blinkPhase += dt;
+    const t = state.blinkPhase / 0.13;
+    blinkScale = t < 0.5 ? 1 - t * 1.9 : (t - 0.5) * 1.9;
+    blinkScale = clamp(blinkScale, 0.06, 1);
+    if (t >= 1) {
+      state.blinkPhase = -1;
+      state.blinkTimer = 1.8 + Math.random() * 3.1;
+    }
+  } else if (state.blinkTimer <= 0) {
+    state.blinkPhase = 0;
+  }
+
+  const eyeY = state.expression.eyeScaleY * blinkScale;
+  leftEye.group.scale.y = eyeY;
+  rightEye.group.scale.y = eyeY;
+}
+
+function updateExpression() {
+  const leftSide = -1;
+  const rightSide = 1;
+  leftBrow.position.y = 0.73 + state.expression.browY;
+  rightBrow.position.y = 0.73 + state.expression.browY;
+  leftBrow.rotation.z = leftSide * -0.18 + state.expression.browTilt * leftSide;
+  rightBrow.rotation.z = rightSide * -0.18 + state.expression.browTilt * rightSide;
+}
+
+function updateGesture(dt) {
+  leftShoulder.rotation.set(0, 0, -0.24);
+  rightShoulder.rotation.set(0, 0, 0.24);
+  deskStamp.rotation.set(0, 0, 0);
+  deskStamp.position.y = -1.66;
+
+  const idle = Math.sin(performance.now() * 0.0024) * 0.08;
+  leftShoulder.rotation.z += idle;
+  rightShoulder.rotation.z -= idle;
+
+  if (!state.gesture) return;
+  state.gestureTime += dt;
+  const t = state.gestureTime;
+  const done = t > 1.15;
+  const env = Math.sin(clamp(t / 1.15, 0, 1) * Math.PI);
+
+  if (state.gesture === "wave") {
+    rightShoulder.rotation.z -= 1.35 * env;
+    rightShoulder.rotation.x += Math.sin(t * Math.PI * 8) * 0.45 * env;
+  }
+
+  if (state.gesture === "stamp") {
+    deskStamp.position.y -= Math.sin(clamp(t / 0.55, 0, 1) * Math.PI) * 0.16;
+    deskStamp.rotation.z += Math.sin(t * Math.PI * 8) * 0.12 * env;
+    rightShoulder.rotation.z -= 0.85 * env;
+  }
+
+  if (state.gesture === "lean") {
+    root.position.z = 1.2 + 0.48 * env;
+  } else {
+    root.position.z += (1.2 - root.position.z) * 0.12;
+  }
+
+  if (state.gesture === "nod") {
+    headGroup.rotation.x += Math.sin(t * Math.PI * 5) * 0.18 * env;
+  }
+
+  if (done) {
+    state.gesture = null;
+    state.gestureTime = 0;
+  }
+}
+
+function trackFps(now) {
+  state.renderFrames.push(now);
+  while (state.renderFrames.length > 90) state.renderFrames.shift();
+  if (state.renderFrames.length > 12) {
+    const elapsed = state.renderFrames[state.renderFrames.length - 1] - state.renderFrames[0];
+    const fps = Math.round(((state.renderFrames.length - 1) / elapsed) * 1000);
+    el.fpsBadge.textContent = `FPS ${fps}`;
+    if (fps >= 45) completeGate("stage_render", true, "Render loop healthy");
+  }
+}
+
+function selectQuestion(questionId) {
+  state.selectedQuestion = questionId;
+  document.querySelectorAll(".question").forEach((button) => {
+    button.classList.toggle("active", button.dataset.question === questionId);
+  });
+  const q = QUESTIONS[questionId];
+  el.currentLine.textContent = q.line;
+  setExpression(q.expression);
+}
+
+function speakSelectedQuestion() {
+  unlockSpeech();
+  stopListening("Mic idle");
+  const q = QUESTIONS[state.selectedQuestion];
+  runTool({ name: "say", args: { ...q, listenAfter: true } });
+}
+
+function unlockSpeech() {
+  if (state.speechUnlocked) return;
+  state.speechUnlocked = true;
+  el.speechBadge.textContent = "Speech unlocked";
+  window.speechSynthesis?.resume?.();
+  window.speechSynthesis?.getVoices?.();
+  completeGate("gesture_unlock", true, "User gesture received");
+}
+
+function runTool(toolCall) {
+  const name = toolCall?.name;
+  const args = toolCall?.args || {};
+  const allowed = ["say", "ask_intake_question", "record_answer", "set_expression", "play_gesture", "complete_verification"];
+  if (!allowed.includes(name)) {
+    logTool("rejected_tool", { name });
+    return false;
+  }
+
+  if (name === "say") {
+    const text = args.text || args.line || "";
+    setExpression(args.expression || "strict");
+    playGesture(args.gesture || "none");
+    state.autoListenAfterSpeech = Boolean(args.listenAfter);
+    say(text);
+  }
+
+  if (name === "ask_intake_question") {
+    const questionId = args.questionId;
+    if (QUESTIONS[questionId]) selectQuestion(questionId);
+  }
+
+  if (name === "record_answer") {
+    logTool("answer", args);
+  }
+
+  if (name === "set_expression") {
+    setExpression(args.expression);
+  }
+
+  if (name === "play_gesture") {
+    playGesture(args.gesture);
+  }
+
+  if (name === "complete_verification") {
+    completeGate(args.gate, Boolean(args.passed), args.notes || "");
+  }
+
+  logTool(name, args);
+  return true;
+}
+
+function setExpression(expression) {
+  const next = EXPRESSIONS[expression] || EXPRESSIONS.strict;
+  state.expressionTarget = { ...next };
+}
+
+function playGesture(gesture) {
+  if (!gesture || gesture === "none") return;
+  state.gesture = gesture;
+  state.gestureTime = 0;
+}
+
+function initSpeechSystem() {
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    el.speechBadge.textContent = "Speech fallback";
+    return;
+  }
+  synth.getVoices();
+  synth.addEventListener?.("voiceschanged", () => {
+    const voices = synth.getVoices();
+    if (voices.length > 0 && state.speechUnlocked && !currentUtterance) {
+      el.speechBadge.textContent = "Speech ready";
+    }
+  });
+}
+
+function say(text) {
+  if (!text) return;
+  el.currentLine.textContent = text;
+  const token = ++speechToken;
+  stopSpeech(false);
+
+  if (!("speechSynthesis" in window)) {
+    audibleFallbackSpeech(text, "speechSynthesis unavailable", token);
+    return;
+  }
+
+  speakWithBrowserVoice(text, 0, token);
+}
+
+function speakWithBrowserVoice(text, attempt, token) {
+  if (token !== speechToken) return;
+  const synth = window.speechSynthesis;
+  if (!synth) {
+    audibleFallbackSpeech(text, "speechSynthesis unavailable", token);
+    return;
+  }
+
+  synth.resume?.();
+  const voices = synth.getVoices();
+  if (voices.length === 0 && attempt < 8) {
+    el.speechBadge.textContent = "Loading voice";
+    setTimeout(() => speakWithBrowserVoice(text, attempt + 1, token), 125);
+    return;
+  }
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.rate = 0.94;
+  utter.pitch = 0.82;
+  utter.volume = 1;
+  const voice = pickVoice(voices);
+  if (voice) utter.voice = voice;
+
+  currentUtterance = utter;
+  state.speaking = true;
+  state.mouthPeak = 0;
+  el.speechBadge.textContent = "Speaking";
+
+  const endAfter = estimateSpeechMs(text) + 1600;
+  clearTimeout(speechEndTimer);
+  speechEndTimer = setTimeout(() => {
+    if (token === speechToken && currentUtterance === utter) {
+      finishSpeech("Speech timeout", token);
+    }
+  }, endAfter);
+
+  utter.onstart = () => {
+    if (token !== speechToken || currentUtterance !== utter) return;
+    state.speaking = true;
+    state.mouthPeak = 0;
+    el.speechBadge.textContent = "Speaking";
+    logTool("speech_start", { voice: utter.voice?.name || "default" });
+  };
+  utter.onend = () => {
+    if (token !== speechToken || currentUtterance !== utter) return;
+    finishSpeech("Speech ended", token);
+  };
+  utter.onerror = (event) => {
+    if (token !== speechToken || currentUtterance !== utter) return;
+    logTool("speech_error", { error: event.error || "unknown", attempt });
+    if (attempt < 1) {
+      currentUtterance = null;
+      setTimeout(() => speakWithBrowserVoice(text, attempt + 1, token), 180);
+      return;
+    }
+    audibleFallbackSpeech(text, event.error || "speechSynthesis error", token);
+  };
+
+  try {
+    synth.speak(utter);
+  } catch (error) {
+    logTool("speech_exception", { message: error.message });
+    audibleFallbackSpeech(text, error.message, token);
+  }
+}
+
+function pickVoice(voices) {
+  const english = voices.filter((voice) => voice.lang?.toLowerCase().startsWith("en"));
+  return (
+    english.find((voice) => /daniel|alex|fred|rishi|oliver|arthur|george|samantha/i.test(voice.name)) ||
+    english.find((voice) => /google|premium|enhanced/i.test(voice.name)) ||
+    english[0] ||
+    voices[0] ||
+    null
+  );
+}
+
+function finishSpeech(label, token) {
+  if (token !== undefined && token !== speechToken) return;
+  clearTimeout(speechEndTimer);
+  speechEndTimer = null;
+  currentUtterance = null;
+  state.speaking = false;
+  el.speechBadge.textContent = label;
+  if (state.mouthPeak > 0.28) completeGate("mouth_sync", true, "Jaw moved during speech");
+  logTool("speech_end", { label });
+  openResponseWindow();
+}
+
+function audibleFallbackSpeech(text, reason, token) {
+  if (token !== speechToken) return;
+  stopSpeech(false);
+  const duration = estimateSpeechMs(text);
+  state.speaking = true;
+  state.mouthPeak = 0;
+  el.speechBadge.textContent = "Fallback voice";
+  logTool("speech_fallback", { reason });
+  playFallbackChatter(duration);
+  clearTimeout(fallbackSpeechTimer);
+  fallbackSpeechTimer = setTimeout(() => {
+    if (token !== speechToken) return;
+    state.speaking = false;
+    el.speechBadge.textContent = "Fallback ended";
+    if (state.mouthPeak > 0.28) completeGate("mouth_sync", true, "Synthetic speech moved jaw");
+    openResponseWindow();
+  }, duration);
+}
+
+function openResponseWindow() {
+  if (!state.autoListenAfterSpeech) return;
+  state.autoListenAfterSpeech = false;
+  state.awaitingResponse = true;
+  state.responseRetryCount = 0;
+  el.transcriptLine.textContent = "Your turn. Speak now.";
+  el.micBadge.textContent = "Your turn";
+  setTimeout(() => {
+    if (!state.speaking && !state.listening) {
+      startListening({ responseWindow: true });
+    }
+  }, 320);
+}
+
+function playFallbackChatter(duration) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  fallbackAudioContext ||= new AudioContext();
+  const ctx = fallbackAudioContext;
+  ctx.resume?.();
+  const now = ctx.currentTime;
+  const pulses = Math.min(22, Math.max(5, Math.round(duration / 170)));
+  for (let i = 0; i < pulses; i += 1) {
+    const start = now + i * 0.13;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(190 + (i % 4) * 32, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.045, start + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.105);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + 0.12);
+  }
+}
+
+function stopSpeech(resetMouth = true, invalidate = false) {
+  if (invalidate) {
+    speechToken += 1;
+    state.autoListenAfterSpeech = false;
+  }
+  clearTimeout(speechEndTimer);
+  clearTimeout(fallbackSpeechTimer);
+  speechEndTimer = null;
+  fallbackSpeechTimer = null;
+  currentUtterance = null;
+  window.speechSynthesis?.cancel?.();
+  if (resetMouth) {
+    state.speaking = false;
+  }
+}
+
+function estimateSpeechMs(text) {
+  return clamp(text.length * 54, 1200, 5200);
+}
+
+async function runMicCheck() {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("getUserMedia unavailable");
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.micStream = stream;
+    const audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let loudFrames = 0;
+
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((sum, value) => sum + value, 0) / data.length;
+      const pct = clamp(avg / 80, 0, 1);
+      el.micLevel.style.width = `${Math.round(pct * 100)}%`;
+      if (pct > 0.16) loudFrames += 1;
+      if (loudFrames > 12) {
+        el.micBadge.textContent = "Mic passed";
+        completeGate("mic_level", true, "Voice level detected");
+      }
+      state.micAnimation = requestAnimationFrame(tick);
+    };
+    tick();
+  } catch (error) {
+    el.micBadge.textContent = "Mic blocked";
+    completeGate("mic_level", false, error.message);
+  }
+}
+
+function getSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+  if (recognition) return recognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-US";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    state.listening = true;
+    state.listenFailed = false;
+    state.lastRecognitionError = "";
+    finalTranscript = "";
+    el.listenBtn.classList.add("listening");
+    el.listenBtn.textContent = state.awaitingResponse ? "Waiting for reply..." : "Listening...";
+    el.transcriptLine.textContent = state.awaitingResponse ? "Listening for your reply." : "Listening.";
+    el.micBadge.textContent = "Listening";
+  };
+
+  recognition.onresult = (event) => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      const phrase = event.results[i][0]?.transcript || "";
+      if (event.results[i].isFinal) {
+        finalTranscript += phrase;
+      } else {
+        interim += phrase;
+      }
+    }
+    const visible = `${finalTranscript} ${interim}`.trim();
+    if (visible) {
+      el.transcriptLine.textContent = `Heard: ${visible}`;
+    }
+  };
+
+  recognition.onerror = (event) => {
+    state.lastRecognitionError = event.error || "unknown";
+    if (event.error === "aborted") {
+      logTool("speech_aborted", { ok: true });
+      return;
+    }
+    if (state.awaitingResponse && event.error === "no-speech") {
+      el.transcriptLine.textContent = "Still listening. Say your answer.";
+      el.micBadge.textContent = "Waiting";
+      logTool("speech_retry_pending", { error: event.error });
+      return;
+    }
+    const message = event.error === "not-allowed" ? "Mic permission denied." : `Speech error: ${event.error}.`;
+    el.transcriptLine.textContent = message;
+    el.micBadge.textContent = "Listen failed";
+    state.listenFailed = true;
+    completeGate("listen_loop", false, message);
+    logTool("speech_error", { error: event.error });
+  };
+
+  recognition.onend = () => {
+    state.listening = false;
+    el.listenBtn.classList.remove("listening");
+    el.listenBtn.textContent = "Listen once";
+    if (state.ignoreRecognitionEnd) {
+      state.ignoreRecognitionEnd = false;
+      return;
+    }
+    const transcript = finalTranscript.trim();
+    if (transcript) {
+      state.awaitingResponse = false;
+      state.responseRetryCount = 0;
+      handleTranscript(transcript);
+    } else if (state.awaitingResponse && !state.listenFailed && state.responseRetryCount < 3) {
+      state.responseRetryCount += 1;
+      el.listenBtn.textContent = "Waiting for reply...";
+      el.transcriptLine.textContent = "Still listening. Speak now.";
+      el.micBadge.textContent = "Waiting";
+      setTimeout(() => {
+        if (state.awaitingResponse && !state.speaking && !state.listening) {
+          startListening({ responseWindow: true });
+        }
+      }, 700);
+    } else if (!state.listenFailed) {
+      state.awaitingResponse = false;
+      state.responseRetryCount = 0;
+      el.transcriptLine.textContent = "No phrase captured.";
+      el.micBadge.textContent = "No speech";
+    }
+  };
+
+  return recognition;
+}
+
+function startListening(options = {}) {
+  const responseWindow = options?.responseWindow === true;
+  unlockSpeech();
+  const recognizer = getSpeechRecognition();
+  if (!recognizer) {
+    const message = "Speech recognition is unavailable in this browser.";
+    el.transcriptLine.textContent = message;
+    completeGate("listen_loop", false, message);
+    runTool({
+      name: "say",
+      args: {
+        text: "I can measure sound here, but this browser cannot transcribe speech. Use Chrome for the listening drill.",
+        expression: "skeptical",
+        gesture: "lean",
+      },
+    });
+    return;
+  }
+
+  if (state.listening) {
+    state.awaitingResponse = false;
+    recognizer.stop();
+    return;
+  }
+
+  state.awaitingResponse = responseWindow;
+  state.ignoreRecognitionEnd = false;
+  stopSpeech(true, true);
+  try {
+    recognizer.start();
+  } catch (error) {
+    el.transcriptLine.textContent = "Speech recognition is already starting.";
+    logTool("speech_start_skipped", { message: error.message });
+  }
+}
+
+function stopListening(statusText) {
+  state.awaitingResponse = false;
+  state.responseRetryCount = 0;
+  if (recognition && state.listening) {
+    state.ignoreRecognitionEnd = true;
+    recognition.abort();
+  }
+  state.listening = false;
+  el.listenBtn.classList.remove("listening");
+  el.listenBtn.textContent = "Listen once";
+  if (statusText) {
+    el.micBadge.textContent = statusText;
+  }
+}
+
+function handleTranscript(transcript) {
+  const normalized = transcript.toLowerCase();
+  state.awaitingResponse = false;
+  state.responseRetryCount = 0;
+  el.transcriptLine.textContent = `Heard: ${transcript}`;
+  el.micBadge.textContent = "Heard speech";
+  completeGate("listen_loop", true, transcript);
+  logTool("voice_transcript", { transcript });
+  runTool({
+    name: "record_answer",
+    args: {
+      questionId: "voice",
+      answer: transcript,
+      confidence: 0.82,
+    },
+  });
+
+  if (matches(normalized, ["night", "shift", "2am", "two am", "turn"])) {
+    selectQuestion("night_shift");
+    runTool({ name: "say", args: { ...QUESTIONS.night_shift, listenAfter: true } });
+    return;
+  }
+
+  if (matches(normalized, ["support", "friend", "call", "help"])) {
+    selectQuestion("support");
+    runTool({ name: "say", args: { ...QUESTIONS.support, listenAfter: true } });
+    return;
+  }
+
+  if (matches(normalized, ["panic", "safe", "breathe", "pause"])) {
+    selectQuestion("panic");
+    runTool({ name: "say", args: { ...QUESTIONS.panic, listenAfter: true } });
+    return;
+  }
+
+  if (matches(normalized, ["feed", "dim", "lights", "calm"])) {
+    runDrill("dim_feed");
+    return;
+  }
+
+  if (matches(normalized, ["argue", "fight", "unfair"])) {
+    runDrill("argue");
+    return;
+  }
+
+  if (matches(normalized, ["sleep", "ignore", "pretend", "shirk"])) {
+    runDrill("ignore");
+    return;
+  }
+
+  if (matches(normalized, ["consent", "agree", "understand", "yes"])) {
+    runTool({
+      name: "say",
+      args: {
+        text: "Consent recorded. The Ministry appreciates unusually clear compliance.",
+        expression: "delighted",
+        gesture: "stamp",
+        listenAfter: true,
+      },
+    });
+    return;
+  }
+
+  runTool({
+    name: "say",
+    args: {
+      text: `Recorded: ${truncate(transcript, 80)}. Officer Tan requires a clearer operational answer.`,
+      expression: "skeptical",
+      gesture: "lean",
+      listenAfter: true,
+    },
+  });
+}
+
+function matches(text, terms) {
+  return terms.some((term) => text.includes(term));
+}
+
+function runDrill(choice) {
+  const outcomes = {
+    dim_feed: {
+      line: "Acceptable. Dim lights, feed, document nothing unless asked.",
+      expression: "delighted",
+      gesture: "stamp",
+      result: "Passed: calm action recorded.",
+    },
+    argue: {
+      line: "Rejected. You may argue after the small citizen is stable.",
+      expression: "strict",
+      gesture: "lean",
+      result: "Needs review: argument before care.",
+    },
+    ignore: {
+      line: "Rejected with emphasis. Pretend sleep has been noticed by the Ministry.",
+      expression: "skeptical",
+      gesture: "stamp",
+      result: "Needs review: shirk recorded.",
+    },
+  };
+  const outcome = outcomes[choice];
+  el.drillResult.textContent = outcome.result;
+  runTool({ name: "say", args: outcome });
+  runTool({
+    name: "record_answer",
+    args: {
+      questionId: "2am_drill",
+      answer: choice,
+      confidence: choice === "dim_feed" ? 0.95 : 0.7,
+    },
+  });
+}
+
+function mockGeminiTurn() {
+  const q = QUESTIONS[state.selectedQuestion];
+  return [
+    {
+      name: "set_expression",
+      args: { expression: q.expression },
+    },
+    {
+      name: "play_gesture",
+      args: { gesture: q.gesture },
+    },
+    {
+      name: "say",
+      args: {
+        text: q.line,
+        expression: q.expression,
+        gesture: q.gesture,
+      },
+    },
+  ];
+}
+
+function panicStop() {
+  stopSpeech(true, true);
+  stopListening("Mic idle");
+  state.speaking = false;
+  state.listening = false;
+  state.gesture = null;
+  state.gestureTime = 0;
+  el.listenBtn.classList.remove("listening");
+  el.listenBtn.textContent = "Listen once";
+  setExpression("strict");
+  el.currentLine.textContent = "Panic stop acknowledged. Returning to the intake desk.";
+  completeGate("panic_stop", true, "Audio and gesture state reset");
+  logTool("panic_stop", { ok: true });
+}
+
+function completeGate(gate, passed, notes) {
+  const item = document.querySelector(`.verify-item[data-gate="${gate}"]`);
+  if (!item) return;
+  item.classList.toggle("pass", passed);
+  item.classList.toggle("fail", !passed);
+  item.querySelector("strong").textContent = passed ? "Passed" : "Failed";
+  if (notes) item.title = notes;
+}
+
+function logTool(name, args) {
+  const line = document.createElement("li");
+  line.textContent = `${name} ${JSON.stringify(args)}`;
+  el.toolLog.prepend(line);
+  while (el.toolLog.children.length > 24) {
+    el.toolLog.lastElementChild.remove();
+  }
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function truncate(text, limit) {
+  return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+}
+
+window.BabyStepsMuppetTools = {
+  runTool,
+  say: (text, options = {}) => runTool({ name: "say", args: { text, ...options } }),
+  setExpression,
+  playGesture,
+  startListening,
+  panicStop,
+};
+
+init();

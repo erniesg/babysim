@@ -1,0 +1,75 @@
+.sing-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 4, 4, 0.78);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  animation: sing-modal-in 0.25s ease-out;
+}
+
+@keyframes sing-modal-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sing-card {
+  background: linear-gradient(160deg, #1a0e0c 0%, #2a1410 100%);
+  border: 1px solid var(--gold);
+  border-radius: 18px;
+  padding: 22px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(420px, 90vw);
+}
+
+.sing-card h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sing-meter {
+  position: relative;
+  width: 100%;
+  height: 90px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sing-meter-fill {
+  width: 100%;
+  background: linear-gradient(0deg, #6cae75 0%, #e9c46a 60%, #ee6c4d 100%);
+  transition: height 0.06s linear;
+}
+
+.sing-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sing-progress-fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.08s linear;
+}
+
+.sing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sing-hint {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  margin: 0;
+}

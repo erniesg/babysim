@@ -1,0 +1,9 @@
+{
+  "provider": "lyria-vertex",
+  "region": "us-central1",
+  "model": "lyria-002",
+  "projectId": "turing-alcove-442306-c6",
+  "prompt": "Slow, ominous bureaucratic theme. Plucked strings, light timpani, distant brass. Evokes 1970s East Asian government drama. Instrumental, no vocals. Loopable.",
+  "bytes": 681644,
+  "generatedAt": "2026-05-09T03:05:52.193Z"
+}

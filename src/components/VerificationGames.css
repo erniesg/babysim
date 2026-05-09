@@ -1,0 +1,97 @@
+.verif-games {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 12px 4px;
+}
+
+.verif-progress {
+  background: #160c0b;
+  border: 1px solid #2a1d18;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.verif-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.verif-progress-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.verif-progress-track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.verif-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--gold));
+  transition: width 0.1s linear;
+}
+
+.verif-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(160deg, #1a0e0c, #2a1410);
+  border: 1px solid #2a1d18;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.verif-questions h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.verif-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.verif-tool-log {
+  background: #110707;
+  border: 1px dashed #2a1d18;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: "SF Mono", Menlo, monospace;
+  font-size: 11px;
+}
+
+.verif-tool-log summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.verif-tool-log ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--dim);
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.verif-tool-log strong {
+  color: var(--gold);
+  font-weight: 600;
+}

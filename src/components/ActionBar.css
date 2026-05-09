@@ -1,0 +1,10 @@
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+}
+
+.action-bar button {
+  flex: 0 0 auto;
+}

@@ -1,0 +1,23 @@
+name = "babysim"
+main = "src/worker/index.ts"
+compatibility_date = "2025-09-30"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+# Confirmed against OpenAI /v1/models: gpt-5.5 is available alongside gpt-5.5-pro.
+OPENAI_TEXT_MODEL = "gpt-5.5"
+OPENAI_REALTIME_MODEL = "gpt-realtime"
+# Confirmed against /v1beta/models: gemini-3.1-flash-live-preview is the current Live audio model.
+GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview"
+GEMINI_TEXT_MODEL = "gemini-3.1-flash-lite"
+
+[observability]
+enabled = true
+
+# Secrets are set via `wrangler secret put` (per-Worker, not in this file):
+#   OPENAI_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY (optional)

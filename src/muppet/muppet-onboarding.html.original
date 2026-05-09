@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Officer Tan Muppet Onboarding</title>
+  <link rel="stylesheet" href="muppet-onboarding.css" />
+  <script src="vendor/three.min.js"></script>
+</head>
+<body>
+  <main class="muppet-shell">
+    <section class="stage-zone" aria-label="Officer Tan onboarding stage">
+      <canvas id="muppetCanvas"></canvas>
+      <div class="stage-copy">
+        <p class="kicker">Ministry of Family and Human Development</p>
+        <h1>Probation intake</h1>
+        <p id="currentLine">Officer Tan is reviewing your application.</p>
+        <div class="stage-actions">
+          <button id="stageSpeakBtn" class="stage-cta">Begin intake</button>
+          <button id="stageListenBtn" class="stage-cta secondary-cta">Talk to Tan</button>
+        </div>
+      </div>
+      <div class="status-strip" aria-label="Verification status">
+        <span id="fpsBadge">FPS --</span>
+        <span id="speechBadge">Speech locked</span>
+        <span id="micBadge">Mic unchecked</span>
+      </div>
+    </section>
+
+    <aside class="control-zone" aria-label="Onboarding controls">
+      <div class="section-head">
+        <p class="kicker">Intake tools</p>
+        <h2>Officer Tan</h2>
+      </div>
+
+      <div class="question-list" aria-label="Intake questions">
+        <button class="question active" data-question="consent">Consent oath</button>
+        <button class="question" data-question="night_shift">Night shift</button>
+        <button class="question" data-question="support">Support plan</button>
+        <button class="question" data-question="panic">Panic plan</button>
+      </div>
+
+      <div class="action-row">
+        <button id="speakBtn" class="primary">Speak line</button>
+        <button id="mockGeminiBtn">Mock Gemini turn</button>
+      </div>
+
+      <div class="listen-block">
+        <button id="listenBtn" class="listen-button">Listen once</button>
+        <p id="transcriptLine" class="result-line">Awaiting transcript.</p>
+      </div>
+
+      <div class="verification">
+        <div class="verify-item" data-gate="gesture_unlock">
+          <span>Gesture unlock</span>
+          <strong>Waiting</strong>
+        </div>
+        <div class="verify-item" data-gate="mouth_sync">
+          <span>Mouth sync</span>
+          <strong>Waiting</strong>
+        </div>
+        <div class="verify-item" data-gate="mic_level">
+          <span>Mic meter</span>
+          <strong>Waiting</strong>
+        </div>
+        <div class="verify-item" data-gate="listen_loop">
+          <span>Speech routing</span>
+          <strong>Waiting</strong>
+        </div>
+        <div class="verify-item" data-gate="tool_loop">
+          <span>Tool loop</span>
+          <strong>Waiting</strong>
+        </div>
+        <div class="verify-item" data-gate="panic_stop">
+          <span>Panic stop</span>
+          <strong>Waiting</strong>
+        </div>
+      </div>
+
+      <div class="meter-block">
+        <div class="meter-label">
+          <span>Voice meter</span>
+          <button id="micBtn">Run mic check</button>
+        </div>
+        <div class="meter"><span id="micLevel"></span></div>
+      </div>
+
+      <div class="drill-block">
+        <p class="kicker">2AM drill</p>
+        <h3>The baby is crying hard and the room is too bright.</h3>
+        <div class="drill-actions">
+          <button data-drill="dim_feed">Dim lights + feed</button>
+          <button data-drill="argue">Argue about turns</button>
+          <button data-drill="ignore">Pretend to sleep</button>
+        </div>
+        <p id="drillResult" class="result-line">No response recorded.</p>
+      </div>
+
+      <div class="event-log" aria-label="Tool event log">
+        <div class="meter-label">
+          <span>Tool log</span>
+          <button id="panicBtn">Panic stop</button>
+        </div>
+        <ol id="toolLog"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <script src="muppet-onboarding.js"></script>
+</body>
+</html>

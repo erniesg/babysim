@@ -1,0 +1,78 @@
+.debrief-card {
+  background: linear-gradient(160deg, #1a0e0c 0%, #2a1410 100%);
+  border: 2px solid var(--gold, #d5a84e);
+  border-radius: 18px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  animation: debrief-in 0.6s cubic-bezier(0.18, 1, 0.32, 1);
+}
+
+@keyframes debrief-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.debrief-stamp {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  color: var(--gold, #d5a84e);
+}
+
+.debrief-archetype {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+}
+
+.debrief-tagline {
+  margin: 0;
+  font-style: italic;
+  color: var(--fg, #f6efe2);
+  opacity: 0.85;
+}
+
+.debrief-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #2a1d18;
+}
+
+.debrief-section ul {
+  margin: 4px 0 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--fg, #f6efe2);
+  opacity: 0.85;
+}
+
+.debrief-section li {
+  list-style: square;
+}
+
+.debrief-section p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.debrief-ledger {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.debrief-ledger div {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 12px;
+}
+
+.debrief-replay {
+  margin-top: 8px;
+  align-self: flex-start;
+}

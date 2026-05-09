@@ -2,7 +2,9 @@
 
 ## Mission
 
-Build BabySim, a seeded, beat-driven newborn-care and co-parenting simulator. The first shippable target is a 2-3 minute hackathon demo that works without live AI calls, generated videos, mic access, or remote services.
+Build BabySim, a multi-agent improv simulator: the Ministry of Family and Human Development pairs the player with a generative-AI newborn. A cast of LLM agents — officer, partner, baby, GM — calls tools in real time to render a 120-second co-parenting rehearsal. Hidden baby traits, a tired AI partner, a fairness ledger between parents, and a verdict that quotes the player back with names and numbers.
+
+The dynamic, fully-generated experience is the product. Deterministic implementations exist as testing harnesses and graceful-degradation fallbacks; every agent and asset must be independently swappable between deterministic and probabilistic modes through one uniform interface.
 
 ## Non-Negotiables
 

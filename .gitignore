@@ -39,3 +39,22 @@ assets/**/*.mov
 .vscode/
 .idea/
 
+
+# Compiled stragglers from `tsc` runs against contracts/
+contracts/*.js
+
+# Local sandbox/scratch dirs from earlier asset experiments
+tmp/
+output/
+design/
+
+# Babysteps-style auxiliary
+.vercel/
+
+# TS build stragglers (tsc -b output beside source)
+src/**/*.js
+!src/**/*.config.js
+src/**/*.d.ts
+!src/vite-env.d.ts
+!src/**/types.d.ts
+tsconfig.tsbuildinfo
