@@ -1,0 +1,165 @@
+.keyseq-challenge {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.keyseq-brief {
+  font-size: 13px;
+  color: var(--dim);
+  font-style: italic;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.keyseq-sequence-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: rgba(10, 5, 4, 0.6);
+  border: 1px solid #2a1d18;
+  border-radius: 14px;
+  padding: 20px 16px;
+}
+
+.keyseq-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  border: 2px solid #3a2722;
+  background: #1a0e0c;
+  font-size: 22px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.keyseq-arrow.keyseq-active {
+  border-color: var(--gold);
+  background: rgba(213, 168, 78, 0.12);
+  box-shadow: 0 0 12px rgba(213, 168, 78, 0.3);
+  animation: keyseq-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes keyseq-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(213, 168, 78, 0.3); }
+  50% { box-shadow: 0 0 24px rgba(213, 168, 78, 0.6); }
+}
+
+.keyseq-arrow.keyseq-done {
+  border-color: var(--good);
+  background: rgba(108, 174, 117, 0.15);
+}
+
+.keyseq-arrow.keyseq-error {
+  border-color: var(--warn);
+  background: rgba(238, 108, 77, 0.15);
+  animation: keyseq-shake 0.3s ease-out;
+}
+
+@keyframes keyseq-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.keyseq-arrow.keyseq-waiting {
+  opacity: 0.4;
+}
+
+.keyseq-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 64px;
+}
+
+.keyseq-input-label {
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.keyseq-input-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1.5px solid #2a1d18;
+  background: #160c0b;
+  font-size: 18px;
+  color: var(--fg);
+  animation: keyseq-input-appear 0.15s ease-out;
+}
+
+@keyframes keyseq-input-appear {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.keyseq-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keyseq-timer-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.keyseq-timer-head .keyseq-time-left {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.keyseq-timer-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.keyseq-timer-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.1s linear;
+  background: linear-gradient(90deg, var(--red), var(--gold));
+}
+
+.keyseq-status {
+  text-align: center;
+  font-size: 14px;
+  min-height: 20px;
+  color: var(--fg);
+}
+
+.keyseq-status.good { color: var(--good); font-weight: 600; }
+.keyseq-status.warn { color: var(--warn); }
+
+.keyseq-retry-note {
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+}
+
+.keyseq-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}

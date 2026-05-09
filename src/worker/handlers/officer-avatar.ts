@@ -1,8 +1,10 @@
-// Officer avatar endpoint — Gemini image generation for officer expression variants.
+// Officer avatar endpoint — Replicate openai/gpt-image-2 for officer expression variants.
 // Returns image/png bytes, cached 1h.
 // Frontend falls back to pre-baked /img/officer-tan-{strict,warm}.png on non-200.
 
 export interface OfficerAvatarEnv {
+  REPLICATE_API_TOKEN: string;
+  // Legacy Gemini keys kept as optional so the shared Env interface stays valid.
   GEMINI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
 }
@@ -43,16 +45,15 @@ function buildPrompt(expression: OfficerExpression, officer: OfficerName): strin
   return `${BASE_PROMPT}${nameNote} Expression: ${EXPRESSION_DESCRIPTORS[expression]}`;
 }
 
-const GEMINI_IMAGE_MODELS = [
-  "gemini-3-pro-image-preview",
-  "gemini-3-image-preview",
-  "gemini-2.5-flash-image-preview",
-  "gemini-3-pro-image-preview",
-];
+// Replicate model: openai/gpt-image-2
+const REPLICATE_VERSION = "9ea921ca3eea597fe8773474545f54601fe1d30bc62517fb30fd86f42e4bb3cf";
+const REPLICATE_PREDICTIONS_URL = "https://api.replicate.com/v1/predictions";
 
-function detectPng(buf: ArrayBuffer): boolean {
-  const view = new Uint8Array(buf, 0, 8);
-  return view[0] === 0x89 && view[1] === 0x50 && view[2] === 0x4e && view[3] === 0x47;
+interface ReplicatePrediction {
+  id: string;
+  status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
+  output?: string[];
+  error?: string;
 }
 
 const corsHeaders = {
@@ -63,10 +64,9 @@ export async function officerAvatarHandler(request: Request, env: OfficerAvatarE
   const reqId = crypto.randomUUID();
   const log = (...args: unknown[]) => console.log(`[officer-avatar ${reqId}]`, ...args);
 
-  const apiKey = env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    log("no GEMINI_API_KEY or GOOGLE_API_KEY");
-    return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), {
+  if (!env.REPLICATE_API_TOKEN) {
+    log("no REPLICATE_API_TOKEN");
+    return new Response(JSON.stringify({ error: "REPLICATE_API_TOKEN not configured" }), {
       status: 503,
       headers: { ...corsHeaders, "content-type": "application/json" },
     });
@@ -96,88 +96,106 @@ export async function officerAvatarHandler(request: Request, env: OfficerAvatarE
       : "Tan";
 
   const prompt = buildPrompt(expression, officer);
-  log("generating avatar", { officer, expression });
+  log("generating avatar via Replicate gpt-image-2", { officer, expression });
 
-  let lastError: string = "no model attempted";
-
-  for (const model of GEMINI_IMAGE_MODELS) {
-    try {
-      const url = new URL(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      );
-      url.searchParams.set("key", apiKey);
-
-      const upstream = await fetch(url.toString(), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { responseModalities: ["IMAGE"] },
-        }),
-      });
-
-      if (!upstream.ok) {
-        const errText = await upstream.text();
-        lastError = `${model} ${upstream.status}: ${errText.slice(0, 300)}`;
-        log("model failed", { model, status: upstream.status });
-        continue;
-      }
-
-      const json = (await upstream.json()) as {
-        candidates?: Array<{
-          content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string }; inline_data?: { data?: string; mimeType?: string } }> };
-        }>;
-      };
-
-      const parts = json?.candidates?.[0]?.content?.parts ?? [];
-      const inlinePart = parts.find((p) => p.inlineData ?? p.inline_data);
-      const inline = inlinePart?.inlineData ?? inlinePart?.inline_data;
-      const base64 = inline?.data;
-
-      if (!base64) {
-        lastError = `${model}: response missing inline image`;
-        log("model missing image", { model });
-        continue;
-      }
-
-      const binaryString = atob(base64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const imageBuf = bytes.buffer;
-
-      if (!detectPng(imageBuf)) {
-        const mimeType = inline?.mimeType ?? "image/jpeg";
-        log("non-png from model, returning raw", { model, mimeType, byteLength: imageBuf.byteLength });
-        return new Response(imageBuf, {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            "content-type": mimeType,
-            "cache-control": "public, max-age=3600",
-          },
-        });
-      }
-
-      log("avatar ok", { model, officer, expression, byteLength: imageBuf.byteLength });
-      return new Response(imageBuf, {
-        status: 200,
-        headers: {
-          ...corsHeaders,
-          "content-type": "image/png",
-          "cache-control": "public, max-age=3600",
+  // POST to Replicate with Prefer: wait=60 for a synchronous response.
+  let prediction: ReplicatePrediction;
+  try {
+    const resp = await fetch(REPLICATE_PREDICTIONS_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json",
+        "Prefer": "wait=60",
+      },
+      body: JSON.stringify({
+        version: REPLICATE_VERSION,
+        input: {
+          prompt,
+          aspect_ratio: "1:1",
+          quality: "auto",
+          output_format: "png",
         },
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      log("replicate create failed", { status: resp.status, body: errText.slice(0, 300) });
+      return new Response(
+        JSON.stringify({ error: "upstream_error", detail: `Replicate ${resp.status}: ${errText.slice(0, 300)}` }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+
+    prediction = await resp.json() as ReplicatePrediction;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("replicate create threw", detail);
+    return new Response(
+      JSON.stringify({ error: "upstream_error", detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  log("prediction initial status", { id: prediction.id, status: prediction.status });
+
+  // If still processing after Prefer: wait, do one poll after 5s (Workers cap ~30s wall-clock).
+  if (prediction.status === "processing" || prediction.status === "starting") {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    try {
+      const pollResp = await fetch(`${REPLICATE_PREDICTIONS_URL}/${prediction.id}`, {
+        headers: { "Authorization": `Bearer ${env.REPLICATE_API_TOKEN}` },
       });
+      if (pollResp.ok) {
+        prediction = await pollResp.json() as ReplicatePrediction;
+        log("poll status", { id: prediction.id, status: prediction.status });
+      }
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      log("model threw", { model, err: lastError });
+      log("poll threw", err instanceof Error ? err.message : String(err));
     }
   }
 
-  log("all models failed", lastError);
-  return new Response(
-    JSON.stringify({ error: "upstream_error", detail: lastError }),
-    { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
-  );
+  if (prediction.status !== "succeeded" || !prediction.output?.length) {
+    const detail = prediction.error ?? `status=${prediction.status}`;
+    log("prediction did not succeed", { id: prediction.id, detail });
+    return new Response(
+      JSON.stringify({ error: "upstream_error", detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  const imageUrl = prediction.output[0];
+  log("fetching image bytes", { imageUrl });
+
+  let imageBytes: ArrayBuffer;
+  try {
+    const imgResp = await fetch(imageUrl);
+    if (!imgResp.ok) {
+      const errText = await imgResp.text();
+      log("image fetch failed", { status: imgResp.status });
+      return new Response(
+        JSON.stringify({ error: "upstream_error", detail: `image fetch ${imgResp.status}: ${errText.slice(0, 200)}` }),
+        { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+      );
+    }
+    imageBytes = await imgResp.arrayBuffer();
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    log("image fetch threw", detail);
+    return new Response(
+      JSON.stringify({ error: "upstream_error", detail }),
+      { status: 503, headers: { ...corsHeaders, "content-type": "application/json" } },
+    );
+  }
+
+  log("avatar ok", { officer, expression, byteLength: imageBytes.byteLength });
+  return new Response(imageBytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "content-type": "image/png",
+      "cache-control": "public, max-age=3600",
+    },
+  });
 }

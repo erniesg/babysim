@@ -15,9 +15,11 @@
     "tail": "wrangler tail",
     "gen:baby-sounds": "node scripts/generate-baby-sounds.mjs",
     "gen:officer-avatar": "node scripts/generate-officer-avatar.mjs",
-    "gen:partner-avatars": "node scripts/generate-partner-avatar.mjs"
+    "gen:partner-avatars": "node scripts/generate-partner-avatar.mjs",
+    "gen:baby-clips": "node scripts/generate-baby-clips.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.169.0"

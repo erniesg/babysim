@@ -1,0 +1,117 @@
+.voice-challenge {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.voice-phrase-box {
+  background: rgba(10, 5, 4, 0.7);
+  border: 1px solid #3a2722;
+  border-left: 3px solid var(--gold);
+  border-radius: 12px;
+  padding: 16px 20px;
+  font-size: 17px;
+  font-style: italic;
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.voice-phrase-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.voice-transcript {
+  background: rgba(10, 5, 4, 0.5);
+  border: 1px dashed #2a1d18;
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-height: 56px;
+  font-size: 14px;
+  color: var(--fg);
+  line-height: 1.55;
+  position: relative;
+}
+
+.voice-transcript-label {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 6px;
+}
+
+.voice-listening-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warn);
+  margin-right: 8px;
+  vertical-align: middle;
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.voice-similarity-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voice-similarity-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.voice-similarity-label span:last-child {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.voice-similarity-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.voice-similarity-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--red), var(--good));
+}
+
+.voice-status {
+  font-size: 14px;
+  color: var(--fg);
+  text-align: center;
+  min-height: 20px;
+}
+
+.voice-status.good { color: var(--good); font-weight: 600; }
+.voice-status.warn { color: var(--warn); }
+
+.voice-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.voice-skip-note {
+  font-size: 12px;
+  color: var(--dim);
+  text-align: center;
+  font-style: italic;
+  margin: 0;
+}

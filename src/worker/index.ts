@@ -12,11 +12,13 @@ import { babyPortraitHandler, type BabyPortraitEnv } from "./handlers/baby-portr
 import { officerAvatarHandler, type OfficerAvatarEnv } from "./handlers/officer-avatar";
 import { musicHandler, type MusicEnv } from "./handlers/music";
 import { cutePayoffHandler, type CutePayoffEnv } from "./handlers/cute-payoff";
+import { cinematicHandler, type CinematicEnv } from "./handlers/cinematic";
 
 // GMEnv is an alias of OfficerEnv (same OPENAI_API_KEY + OPENAI_TEXT_MODEL).
 // BabySfxEnv extends ElevenLabsEnv (same ELEVENLABS_API_KEY).
-// BabyPortraitEnv and OfficerAvatarEnv share GEMINI_API_KEY / GOOGLE_API_KEY.
+// BabyPortraitEnv and OfficerAvatarEnv use REPLICATE_API_TOKEN (gpt-image-2 via Replicate).
 // MusicEnv and CutePayoffEnv share GOOGLE_SERVICE_ACCOUNT_JSON.
+// CinematicEnv requires REPLICATE_API_TOKEN (already set as a Worker secret; same field as above).
 interface Env
   extends OfficerEnv,
     ElevenLabsEnv,
@@ -28,7 +30,8 @@ interface Env
     BabyPortraitEnv,
     OfficerAvatarEnv,
     MusicEnv,
-    CutePayoffEnv {
+    CutePayoffEnv,
+    CinematicEnv {
   ASSETS: Fetcher;
 }
 
@@ -56,6 +59,7 @@ export default {
           ts: Date.now(),
           secrets: {
             OPENAI_API_KEY: Boolean(env.OPENAI_API_KEY),
+            REPLICATE_API_TOKEN: Boolean(env.REPLICATE_API_TOKEN),
             GEMINI_API_KEY: Boolean(env.GEMINI_API_KEY),
             GOOGLE_API_KEY: Boolean(env.GOOGLE_API_KEY),
           },
@@ -83,6 +87,8 @@ export default {
     if (path === "/api/music/probation-theme" && method === "POST") return musicHandler(request, env);
     // cute-payoff handles both POST (initiate) and GET (poll) internally
     if (path === "/api/cute-payoff/video") return cutePayoffHandler(request, env);
+    // cinematic handles both POST (initiate Seedance 2.0) and GET (poll) internally
+    if (path === "/api/cinematic") return cinematicHandler(request, env);
 
     if (path.startsWith("/api/")) {
       return new Response(JSON.stringify({ error: "not_found", path }), {
