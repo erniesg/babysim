@@ -676,3 +676,46 @@ describe("fairness ledger via reducer", () => {
     expect(state.ledger.playerNightShifts).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 9. reducer derives visualState from needs after player actions
+// ---------------------------------------------------------------------------
+
+describe("reducer derives visualState", () => {
+  it("hungry baby (hunger=80) reads as crying via derived visualState", () => {
+    let state = makeMinimalState("first_cry");
+    state = {
+      ...state,
+      baby: {
+        ...state.baby,
+        needs: { ...state.baby.needs, hunger: 80 },
+        visualState: "settled",
+      },
+    };
+    state = reducer(state, makeEvent("ACTION", "player", "wait"));
+    expect(state.baby.visualState).toBe("crying");
+  });
+
+  it("feeding a hungry baby steps visualState down", () => {
+    let state = makeMinimalState("first_cry");
+    state = {
+      ...state,
+      baby: {
+        ...state.baby,
+        needs: { ...state.baby.needs, hunger: 80 },
+        visualState: "crying",
+      },
+    };
+    state = reducer(state, makeEvent("ACTION", "player", "feed"));
+    expect(["fussy", "hungry", "settled"]).toContain(state.baby.visualState);
+    expect(state.baby.visualState).not.toBe("crying");
+  });
+
+  it("agent visualState override survives one event then re-derives", () => {
+    let state = makeMinimalState("first_cry");
+    state = reducer(state, makeEvent("AGENT_VISUAL_STATE", "system", undefined, { visualState: "crying" }));
+    expect(state.baby.visualState).toBe("crying");
+    state = reducer(state, makeEvent("ACTION", "player", "wait"));
+    expect(state.baby.visualState).toBe("settled");
+  });
+});

@@ -1,6 +1,18 @@
 import type { GameState, GameEvent, BabyNeeds, FairnessLedger, BabyTraits } from "@contracts/game-state";
 import { BEAT_GRAPH } from "@contracts/beats";
 import { clamp, deriveMood } from "@contracts/game-state";
+import { visualState as deriveVisualState } from "./baby-agent";
+
+// Wrap the reducer so every needs-touching event recomputes visualState.
+// Single source of truth lives in baby-agent.visualState() — the runtime
+// already calls it on BEAT_ENTERED, agent need deltas, and ticks; this
+// closes the gap for player actions (feed/rock/hold/etc.) so the photo
+// rig + cry channel stay in lockstep with the model on the player path.
+function withDerivedVisualState(state: GameState): GameState {
+  const vs = deriveVisualState(state.baby);
+  if (state.baby.visualState === vs) return state;
+  return { ...state, baby: { ...state.baby, visualState: vs } };
+}
 
 function applyNeedsDelta(
   needs: BabyNeeds,
@@ -78,6 +90,14 @@ function applyLedgerDelta(
 }
 
 export function reducer(state: GameState, event: GameEvent): GameState {
+  const next = _reducer(state, event);
+  // Honor agent visual-state overrides for one cycle — the next non-agent
+  // event will recompute from needs and clobber stale overrides.
+  if (event.type === "AGENT_VISUAL_STATE") return next;
+  return withDerivedVisualState(next);
+}
+
+function _reducer(state: GameState, event: GameEvent): GameState {
   const appendedLog = [...state.eventLog, event];
 
   if (event.type === "ACTION" && event.action != null) {
