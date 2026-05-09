@@ -36,13 +36,20 @@ body,
   position: relative;
 }
 
-/* Music mute toggle — fixed top-right of the app shell so it's reachable on
- * every beat. Clicking flips the ambient channel intensity 1 ↔ 0. */
-.music-toggle {
+/* HUD cluster — top-right session controls (audio activity / realtime
+ * provider toggle / music mute). Fixed so it's reachable on every beat. */
+.hud-cluster {
   position: fixed;
   top: 14px;
   right: 14px;
   z-index: 50;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Music mute toggle — flips the ambient channel intensity 1 ↔ 0. */
+.music-toggle {
   width: 40px;
   height: 40px;
   display: inline-flex;

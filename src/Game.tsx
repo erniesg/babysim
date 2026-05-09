@@ -20,6 +20,8 @@ import { TimeProgressBar } from "./components/TimeProgressBar";
 import { OfficerWarning } from "./components/OfficerWarning";
 import { AdoptOrGenerate, type BabyKind, type AdoptedRig } from "./components/AdoptOrGenerate";
 import { DebugOverlay } from "./components/DebugOverlay";
+import { AudioActivityPanel } from "./components/AudioActivityPanel";
+import { RealtimeProviderToggle } from "./components/RealtimeProviderToggle";
 import { AudioDirector } from "./audio/AudioDirector";
 import type { MuppetCharacter, MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
 import { llmOfficerBeat, isOfficerAgentEnabled, type OfficerToolCall } from "./llm/officer-agent";
@@ -930,15 +932,19 @@ export function Game() {
 
   return (
     <main className="app-shell">
-      <button
-        type="button"
-        className="music-toggle"
-        onClick={() => setMusicMuted((m) => !m)}
-        aria-label={musicMuted ? "Unmute music" : "Mute music"}
-        title={musicMuted ? "Unmute music" : "Mute music"}
-      >
-        {musicMuted ? "🔇" : "🔊"}
-      </button>
+      <div className="hud-cluster" aria-label="Session controls">
+        <AudioActivityPanel audio={audioRef.current} />
+        <RealtimeProviderToggle />
+        <button
+          type="button"
+          className="music-toggle"
+          onClick={() => setMusicMuted((m) => !m)}
+          aria-label={musicMuted ? "Unmute music" : "Mute music"}
+          title={musicMuted ? "Unmute music" : "Mute music"}
+        >
+          {musicMuted ? "🔇" : "🔊"}
+        </button>
+      </div>
       <header className="app-bar">
         <span className="kicker">Ministry of Family and Human Development</span>
         {/* Logos now cycle on the muppet's chest badge (see muppet-engine.ts).

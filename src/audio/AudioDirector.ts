@@ -49,6 +49,28 @@ export class AudioDirector {
   // Revoked in dispose() to avoid memory leaks.
   private liveBlobUrls: Map<string, string> = new Map();
 
+  // Subscribers to channel-activity changes. Used by the HUD ActivityPanel
+  // to pulse a dot whenever a channel is actively emitting sound (intensity
+  // > 0 AND an element is mounted-and-playing).
+  private activityListeners = new Set<(active: Partial<Record<Channel, boolean>>) => void>();
+
+  // Latest activity snapshot — keep one source of truth so subscribers added
+  // after a play() call still get the current state on first dispatch.
+  private activity: Partial<Record<Channel, boolean>> = {};
+
+  onActivity(fn: (active: Partial<Record<Channel, boolean>>) => void): () => void {
+    this.activityListeners.add(fn);
+    fn({ ...this.activity });
+    return () => this.activityListeners.delete(fn);
+  }
+
+  private setActivity(channel: Channel, active: boolean): void {
+    if (this.activity[channel] === active) return;
+    this.activity[channel] = active;
+    const snapshot = { ...this.activity };
+    for (const fn of this.activityListeners) fn(snapshot);
+  }
+
   unlock(): void {
     this.unlocked = true;
   }
@@ -93,14 +115,17 @@ export class AudioDirector {
       this.fadeTo(el, 0, 240, () => {
         try { el.pause(); } catch { /* noop */ }
       });
+      this.setActivity(channel, false);
     } else if (prev <= 0.001 && clamped > 0.001) {
       // Hard unmute — resume from paused, fade up to target.
       el.volume = 0;
       el.play().catch(() => { /* autoplay blocked — silent fail */ });
       this.fadeTo(el, baseline * clamped, 240);
+      this.setActivity(channel, true);
     } else {
       // Smooth modulate (e.g. visualState shift) — just retarget.
       this.fadeTo(el, baseline * clamped, 240);
+      this.setActivity(channel, true);
     }
   }
 
@@ -160,6 +185,9 @@ export class AudioDirector {
     if (intensity > 0.001) {
       // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
       this.fadeTo(el, targetVol, 300);
+      this.setActivity(channel, true);
+    } else {
+      this.setActivity(channel, false);
     }
   }
 
@@ -260,6 +288,7 @@ export class AudioDirector {
         });
         delete this.elements[ch];
         delete this.playing[ch];
+        this.setActivity(ch, false);
       }
       return;
     }
@@ -271,6 +300,7 @@ export class AudioDirector {
       });
       delete this.elements[target];
       delete this.playing[target];
+      this.setActivity(target, false);
     }
   }
 

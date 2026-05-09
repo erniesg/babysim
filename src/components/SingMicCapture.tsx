@@ -170,8 +170,16 @@ export function SingMicCapture({ onCancel, onComplete }: Props) {
   return (
     <div className="sing-modal">
       <div className="sing-card">
-        <span className="kicker">Sing into the mic</span>
-        <h3>{phase === "prep" ? "Hold a soft hum or lullaby." : phase === "recording" ? "Keep going…" : "Analyzing…"}</h3>
+        <span className="kicker">Sing into the mic — or upload a clip</span>
+        <h3>
+          {phase === "prep"
+            ? "Hold a soft hum or lullaby."
+            : phase === "recording"
+              ? "Keep going…"
+              : phase === "analyzing"
+                ? "Analyzing your clip…"
+                : "Done."}
+        </h3>
         <div className="sing-meter">
           <div className="sing-meter-fill" style={{ height: `${Math.round(level * 100)}%` }} />
         </div>

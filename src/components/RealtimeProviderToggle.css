@@ -1,0 +1,43 @@
+.realtime-provider-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(245, 220, 140, 0.22);
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.realtime-provider-tag {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245, 220, 140, 0.62);
+  margin-right: 4px;
+}
+
+.realtime-provider-btn {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.42);
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.realtime-provider-btn:hover {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.realtime-provider-btn.is-active {
+  background: rgba(245, 220, 140, 0.16);
+  border-color: rgba(245, 220, 140, 0.5);
+  color: rgba(245, 220, 140, 0.96);
+}
