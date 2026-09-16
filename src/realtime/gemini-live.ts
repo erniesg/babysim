@@ -4,7 +4,7 @@ const TOKEN_ENDPOINT = "/api/realtime/gemini/token";
 
 const log = (...args: unknown[]) => console.log("[GeminiLive]", ...args);
 
-type GeminiTokenResponse = {
+export type GeminiTokenResponse = {
   ephemeralToken: string;
   model: string;
   source?: "auth_token_v1alpha" | "master_key_fallback";
@@ -27,6 +27,14 @@ type LiveServerMessage = {
     functionCalls?: Array<{ name: string; args?: Record<string, unknown>; id?: string }>;
   };
 };
+
+export function geminiLiveWebSocketUrl(tokenInfo: GeminiTokenResponse): string {
+  const token = encodeURIComponent(tokenInfo.ephemeralToken);
+  if (tokenInfo.source === "auth_token_v1alpha" || tokenInfo.ephemeralToken.startsWith("auth_tokens/")) {
+    return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained?access_token=${token}`;
+  }
+  return `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${token}`;
+}
 
 const PARTNER_TOOLS = [
   {
@@ -136,7 +144,7 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
 
   async function start(): Promise<void> {
     const tokenInfo = await fetchEphemeralToken();
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(tokenInfo.ephemeralToken)}`;
+    const wsUrl = geminiLiveWebSocketUrl(tokenInfo);
     log("opening websocket", { model: tokenInfo.model, source: tokenInfo.source });
     ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
@@ -236,6 +244,19 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
               log("tool call", fc);
               const call = { name: fc.name, args: (fc.args ?? {}) as Record<string, unknown> } as PartnerToolCall;
               emit({ type: "tool_call", call });
+              if (fc.id && ws?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  toolResponse: {
+                    functionResponses: [
+                      {
+                        id: fc.id,
+                        name: fc.name,
+                        response: { ok: true },
+                      },
+                    ],
+                  },
+                }));
+              }
             }
           }
         },
@@ -251,9 +272,9 @@ export const createGeminiLivePartner: CreatePartnerSession = (config: PartnerSes
           log("ws close", { code, reason });
           clearSetupTimer();
           emit({ type: "closed", code, reason });
-          // If the WS closes BEFORE setupComplete arrives, surface this — most
-          // common cause is the auth/tokens 404 fallback being a master key the
-          // wss endpoint then rejects with a 1006/1011 close.
+          // If the WS closes BEFORE setupComplete arrives, surface this. The
+          // common cause is the auth_tokens path failing and the v1beta key
+          // fallback being rejected by the Live endpoint.
           if (!opened) {
             const detail = `WebSocket closed before setupComplete (code ${code}${reason ? `, ${reason}` : ""}). Token source: ${tokenInfo.source ?? "?"}.`;
             emit({ type: "error", error: detail });
