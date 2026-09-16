@@ -577,6 +577,16 @@ describe("DirectorRuntime", () => {
     expect(sceneChange).toBeUndefined();
   });
 
+  it("executeCommand SET_CAPTION updates render caption", () => {
+    const rt = makeRuntime("first_cry");
+    let caption = "";
+    rt.subscribe((msg) => {
+      if (msg.type === "state") caption = msg.render.caption;
+    });
+    rt.executeCommand({ type: "SET_CAPTION", text: "GM sees the room tilt." });
+    expect(caption).toBe("GM sees the room tilt.");
+  });
+
   it("beat timeout fires fallback beat after timeoutMs", () => {
     const rt = makeRuntime("probation_splash");
     // probation_splash timeoutMs=5000, fallbackBeat=officer_intro
@@ -647,6 +657,16 @@ describe("LocalGameTransport", () => {
     const sceneChange = msgs.find((m) => m.type === "scene_change" && (m as { beatId: string }).beatId === "verdict");
     expect(sceneChange).toBeDefined();
   });
+
+  it("partner realtime take_night_shift tool increments partner ledger via reducer", () => {
+    let lastState: GameState | null = null;
+    const transport = new LocalGameTransport("sess-5", "seed-5");
+    transport.subscribe((m) => {
+      if (m.type === "state") lastState = m.state;
+    });
+    transport.send({ type: "agent_partner_tool", tool: "take_night_shift" });
+    expect((lastState as unknown as GameState).ledger.partnerNightShifts).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -674,5 +694,62 @@ describe("fairness ledger via reducer", () => {
     let state = makeMinimalState("night_cry");
     state = reducer(state, makeEvent("ACTION", "player", "get_up"));
     expect(state.ledger.playerNightShifts).toBe(1);
+  });
+
+  it("STATE_CHANGED partner deltas clamp resentment and apply ledger deltas", () => {
+    let state = makeMinimalState("argument_start");
+    state = {
+      ...state,
+      partner: { ...state.partner, resentment: 94 },
+    };
+    state = reducer(state, makeEvent("STATE_CHANGED", "partner", undefined, {
+      partnerDelta: { resentment: 25 },
+      ledgerDelta: { partnerNightShifts: 1 },
+    }));
+    expect(state.partner.resentment).toBe(100);
+    expect(state.ledger.partnerNightShifts).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. reducer derives visualState from needs after player actions
+// ---------------------------------------------------------------------------
+
+describe("reducer derives visualState", () => {
+  it("hungry baby (hunger=80) reads as crying via derived visualState", () => {
+    let state = makeMinimalState("first_cry");
+    state = {
+      ...state,
+      baby: {
+        ...state.baby,
+        needs: { ...state.baby.needs, hunger: 80 },
+        visualState: "settled",
+      },
+    };
+    state = reducer(state, makeEvent("ACTION", "player", "wait"));
+    expect(state.baby.visualState).toBe("crying");
+  });
+
+  it("feeding a hungry baby steps visualState down", () => {
+    let state = makeMinimalState("first_cry");
+    state = {
+      ...state,
+      baby: {
+        ...state.baby,
+        needs: { ...state.baby.needs, hunger: 80 },
+        visualState: "crying",
+      },
+    };
+    state = reducer(state, makeEvent("ACTION", "player", "feed"));
+    expect(["fussy", "hungry", "settled"]).toContain(state.baby.visualState);
+    expect(state.baby.visualState).not.toBe("crying");
+  });
+
+  it("agent visualState override survives one event then re-derives", () => {
+    let state = makeMinimalState("first_cry");
+    state = reducer(state, makeEvent("AGENT_VISUAL_STATE", "system", undefined, { visualState: "crying" }));
+    expect(state.baby.visualState).toBe("crying");
+    state = reducer(state, makeEvent("ACTION", "player", "wait"));
+    expect(state.baby.visualState).toBe("settled");
   });
 });

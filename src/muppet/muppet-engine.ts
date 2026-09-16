@@ -208,8 +208,13 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x120808, 10, 28);
 
-  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-  camera.position.set(0, 1.25, 10.5);
+  // Hand-muppet framing: camera at chest level, looking slightly UP at the
+  // muppet's face, so the figure dominates the frame with the chest badge
+  // (where provider logos cycle) clearly readable. Was previously perched
+  // high looking down, which left empty ceiling above the head.
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+  camera.position.set(0, -0.6, 9.2);
+  camera.lookAt(0, -0.35, 0);
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -525,8 +530,10 @@ export function createMuppetEngine(canvas: HTMLCanvasElement): MuppetController 
     camera.updateProjectionMatrix();
     const compact = width < 700;
     const narrow = width >= 700 && width < 980;
-    state.rootBaseX = compact ? 0 : narrow ? 0.18 : 0.35;
-    state.rootScale = compact ? 0.66 : narrow ? 0.68 : 0.72;
+    // Center the muppet and scale up so chest-badge logos read clearly. The
+    // off-center composition (older default) left dead space at 80vh stage.
+    state.rootBaseX = 0;
+    state.rootScale = compact ? 0.95 : narrow ? 1.05 : 1.15;
   }
 
   function onPointerMove(event: PointerEvent) {

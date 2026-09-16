@@ -10,17 +10,19 @@ This doc enumerates those agents, the tools they may call, the system prompts th
 |---|:-:|:-:|:-:|:-:|:-:|
 | **Officer** (gpt-5.5) | ✅ 7 tools (`say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input`) | ✅ `tools[]` (no forced `tool_choice`) | ✅ `tool_calls[*].function.arguments` parsed into `OfficerToolCall[]` | ✅ each call dispatched in `Game.tsx`; `say` → muppet ElevenLabs | ✅ verified in production at `babysim.berlayar.ai` |
 | **Partner — per-beat text** (gemini-3.1-flash-lite) | ✅ 1 tool: `say_line` | ✅ `tool_config: { mode: "ANY", allowed_function_names: ["say_line"] }` | ✅ Gemini `functionCall.args` parsed | ✅ overrides scripted line per beat behind `VITE_PARTNER_LIVE_TEXT=1` | ✅ wired at `/api/partner/line` |
-| **Partner — Gemini Live mic** (arguments only) | ✅ 4 tools | ✅ in `setup` frame | ✅ `msg.toolCall.functionCalls` | ✅ `concede→comfort_partner`, `refuse→get_up`, `take_night_shift→comfort_partner` | ⚠️ Google `v1alpha/auth/tokens` 404 — Worker falls back to master-key relay |
-| **Partner — OpenAI Realtime swap** | ❌ tools NOT registered via `session.update` | ❌ | ⚠️ DataChannel listens for `response.function_call_arguments.done` | ⚠️ same browser handler, never fires | 🚧 ephemeral-key flow works; `session.update` tools is the missing piece |
+| **Partner — Gemini Live mic** (arguments only) | ✅ 4 tools | ✅ in `setup` frame | ✅ `msg.toolCall.functionCalls` parsed + acknowledged with `toolResponse` | ✅ same reducer-owned partner tool path | ✅ default provider via v1alpha `auth_tokens` |
+| **Partner — OpenAI Realtime mic** (arguments only) | ✅ 4 tools | ✅ via `session.update` | ✅ `response.function_call_arguments.done` and `response.output_item.done` parsed | ✅ tools route through reducer-owned `agent_partner_tool` state/ledger updates | ✅ fallback provider |
 | **Baby** (gpt-5.5) | ✅ 7 consultative tools (`play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`) plus `trigger_fallback` | ✅ `tool_choice: "auto"` | ✅ validated + channel-stripped | ✅ multi-call `{ tools: [{name, args}] }`; reducer clamps deltas via `dispatchAgentEvent` | ✅ wired at `/api/baby`; pure-function path retained as fallback |
-| **GM (Director)** | ✅ 7 director tools | ✅ `tool_choice: "auto"` | ✅ `tool_calls[*].function.arguments` | ✅ validated + returned as `{ tools, rejected }` for browser dispatch | ✅ wired, deployed (`/api/gm`); deterministic fallback in `runtime.ts` still authoritative |
+| **GM (Director)** | ✅ 7 director tools | ✅ `tool_choice: "auto"` | ✅ `tool_calls[*].function.arguments` | ✅ `src/llm/gm-agent.ts` maps tools to `DirectorCommand`; `Game.tsx` dispatches via `DirectorRuntime.executeCommand()` | ✅ wired locally; deterministic fallback in `runtime.ts` still authoritative |
 
 Code paths for the wiring (verify by grepping):
 - Officer tool defs + parser: `src/worker/handlers/officer.ts`
 - Officer tool args → muppet / engine: `src/Game.tsx` officer-intro effect → `muppet-engine.ts:say()` and `dispatchAgentEvent`
 - Partner per-beat text: `src/worker/handlers/partner-line.ts` + `src/llm/partner-agent.ts`
+- Partner OpenAI Realtime tools: `src/realtime/openai-realtime.ts`
 - Partner Gemini Live tools: `src/realtime/gemini-live.ts`
 - Baby agent dispatch + clamp: `src/worker/handlers/baby.ts` + `src/engine/runtime.ts:dispatchAgentEvent`
+- GM agent dispatch: `src/llm/gm-agent.ts` + `src/Game.tsx` beat-entry effect
 
 ## Agent map
 
@@ -28,9 +30,9 @@ Code paths for the wiring (verify by grepping):
 |---|---|---|---|---|---|
 | **Officer** | Cloudflare Worker `/api/officer` | `gpt-5.5` | env var `OPENAI_TEXT_MODEL` (any OpenAI text-capable model). Anthropic key is wired for one-line swap. | `say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input` | **Live in production** |
 | **Partner per-beat text** | Cloudflare Worker `/api/partner/line` | `gemini-3.1-flash-lite` | env var `GEMINI_TEXT_MODEL` | `say_line({ text, mood?, raise_resentment? })` | **Live behind `VITE_PARTNER_LIVE_TEXT=1`** — falls back to scripted lines × 4 archetypes |
-| **Partner (Realtime mic, arguments only)** | Browser direct WebSocket / WebRTC | `gemini-3.1-flash-live-preview` | env flag `VITE_REALTIME_PARTNER_PROVIDER=openai` swaps to `gpt-realtime`. Same `RealtimePartnerSession` interface for both. | `take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment` | **Live**; Gemini ephemeral-token endpoint falls back to master-key relay because Google's `v1alpha/auth/tokens` returns 404 for this preview key (see Worker logs) |
+| **Partner (Realtime mic, arguments only)** | Browser WebRTC/WebSocket | Gemini `gemini-3.1-flash-live-preview` | env flag `VITE_REALTIME_PARTNER_PROVIDER=openai` swaps to OpenAI Realtime. Same `RealtimePartnerSession` interface for both. | `take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment` | **Gemini Live by default**; Worker mints v1alpha `auth_tokens` and the browser connects to `BidiGenerateContentConstrained` |
 | **Baby** | Cloudflare Worker `/api/baby` + Browser pure-fn fallback | `gpt-5.5` | env var `OPENAI_TEXT_MODEL` | `play_audio` (baby ch only, server-hardcoded), `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action`, `trigger_fallback` | **Live** — Worker wired; pure-function fallback retained; reducer clamps `set_visual_state` / `set_need_delta` via `dispatchAgentEvent` |
-| **GM (Director)** | Cloudflare Worker `/api/gm` + Browser pure-fn fallback | `gpt-5.5` | env var `OPENAI_TEXT_MODEL` | `enter_beat` (exclusive), `set_caption`, `play_audio`, `stop_audio`, `ask_agent`, `advance_time`, `trigger_fallback` | **Live** — Worker wired; deterministic `runtime.ts` fallback retained |
+| **GM (Director)** | Cloudflare Worker `/api/gm` + deterministic runtime fallback | `gpt-5.5` | env var `OPENAI_TEXT_MODEL`; `VITE_ENABLE_GM_AGENT=0` disables browser calls | `enter_beat` (exclusive), `set_caption`, `play_audio`, `stop_audio`, `ask_agent`, `advance_time`, `trigger_fallback` | **Live** — Worker and browser caller wired; deterministic `runtime.ts` fallback retained |
 
 > Pattern: all agent endpoints are minimal hand-rolled Worker handlers. The
 > published Cloudflare Agents SDK package and Durable Objects are NOT yet
@@ -120,14 +122,14 @@ type PartnerRealtimeTool =
 ### Officer (`src/worker/handlers/officer.ts`)
 Tone: bureaucratic, ominous, slightly absurd, dry-funny — never cruel. Per-character voice profiles via `voiceProfileFor()` (Ernest = dry-mischievous UK lilt, Bern = severe-clipped clinical, Crumb = Singlish-chaotic). Officer typically emits one `say()` per beat (officer_intro / ominous_warning / verdict), optionally chained with `set_expression`, `warn_player`, `advance_phase`, etc. The verdict prompt requires the model to reference at least one ledger number so the verdict feels personal. See `systemPromptFor()` in `src/worker/handlers/officer.ts`.
 
-### Partner (`src/worker/handlers/partner-line.ts` + `src/realtime/gemini-live.ts`)
+### Partner (`src/worker/handlers/partner-line.ts` + `src/realtime/openai-realtime.ts` / `src/realtime/gemini-live.ts`)
 Tone keyed by archetype:
 - **anxious** → hushed, fretty, sentences trailing
 - **chill** → laconic, low-energy, half-amused
 - **resentful** → scorekeeping, clipped, cites the ledger
 - **overfunctioner** → martyred, performatively competent, quietly exhausted
 
-The per-beat text path (Gemini Flash Lite, `say_line`) injects archetype + ledger + recent events on every call; see `partner-line.ts:SYSTEM_PROMPT`. The realtime mic path injects the same shape on every Gemini Live session start, so the partner can say things like "you've been up twice tonight, you've earned this one." See `systemPromptFor()` in `src/realtime/gemini-live.ts`.
+The per-beat text path (Gemini Flash Lite, `say_line`) injects archetype + ledger + recent events on every call; see `partner-line.ts:SYSTEM_PROMPT`. The realtime mic path injects the same shape on every OpenAI Realtime or Gemini Live session start, so the partner can say things like "you've been up twice tonight, you've earned this one." See `systemPromptFor()` in `src/realtime/openai-realtime.ts` and `src/realtime/gemini-live.ts`.
 
 ### Baby (`src/worker/handlers/baby.ts`)
 "You are the baby's internal-state translator … HIDDEN TRAITS the player must discover through trial and error: soothing / stimulation / feeding / sleep / temperament." The system prompt (full text in `BABY_SYSTEM_PROMPT`) walks the model through tool-by-tool guidance for the consultative surface, with explicit rules for BEAT_ENTERED vs action-evaluation turns. Server hardcodes `channel: "baby"` and clamps numeric deltas. If genuinely uncertain, the model is told to call `trigger_fallback` and the deterministic BabyAgent in `src/engine/baby-agent.ts` takes over.
@@ -249,10 +251,10 @@ This is the path-forward for adding Durable Objects (multiplayer + agent state).
 |---|---|---|
 | Officer agent (gpt-5.5) | ✅ Live | 7 tools; per-character voice profiles (Ernest / Bern / Crumb); ledger-aware verdict |
 | Partner per-beat text (Gemini Flash Lite) | ✅ Wired at `/api/partner/line` | `say_line` only; behind `VITE_PARTNER_LIVE_TEXT=1`; scripted lines × 4 archetypes are the fallback |
-| Partner Realtime mic (Gemini Live) | ⚠️ Live with master-key fallback | Active during `argument_start` / `argument_resolution` only; need WS-relay Worker if Google's v1alpha auth-tokens stays 404 |
-| OpenAI Realtime swap | ✅ Wired | env flag flip; ephemeral-key flow already works; `session.update` tool registration still missing |
+| Partner Realtime mic (Gemini Live) | ✅ Wired default | v1alpha `auth_tokens` + constrained WebSocket; tools update ledger/state through reducer-owned `agent_partner_tool` |
+| Partner Realtime mic (OpenAI) | ✅ Wired fallback | Active during `argument_start` / `argument_resolution`; same tool surface as Gemini |
 | Baby agent | ✅ Wired at `/api/baby` | gpt-5.5, `tool_choice: "auto"`, 7 consultative tools + `trigger_fallback`, channel hardcoded to `"baby"`, assetId enum-validated, deltas clamped via `dispatchAgentEvent` |
-| GM agent | ✅ Wired at `/api/gm` | gpt-5.5, `tool_choice: "auto"`, 7 DirectorCommand tools, server-side BEAT_GRAPH transition validation, `{ tools, rejected }` response shape |
+| GM agent | ✅ Wired at `/api/gm` + browser caller | gpt-5.5, `tool_choice: "auto"`, 7 DirectorCommand tools, server-side BEAT_GRAPH transition validation, `{ tools, rejected }` response shape; `Game.tsx` dispatches through runtime |
 | GameSessionDO (multiplayer) | ❌ Not started | Adds two-player rooms, partner-as-second-player, observability. "Join a Room" still alerts. |
 | Baby SFX live generation (`/api/baby/sfx`) | ✅ Wired | ElevenLabs `text_to_sound_v2`; frontend falls back to donateacry public-dataset clips |
 | Baby portrait live generation (`/api/baby/portrait`) | ✅ Wired | Replicate `gpt-image-2` (default) / fal `flux-pro` (alt); 60-90 s cold start; frontend falls back to canonical 2.5D rig |

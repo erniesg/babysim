@@ -1,5 +1,6 @@
-// Provider-neutral interface for the realtime partner-voice session.
-// Backed by Gemini Flash Live first; OpenAI Realtime is a drop-in alternative.
+// Provider-neutral interface for the realtime partner-voice session. Gemini
+// Flash Live is the default; OpenAI Realtime keeps the same tool surface as the
+// fallback provider.
 
 import type { PartnerTraits } from "@contracts/game-state";
 

@@ -18,18 +18,21 @@ import { VerificationGames } from "./components/VerificationGames";
 import { LogoStrip } from "./components/LogoStrip";
 import { TimeProgressBar } from "./components/TimeProgressBar";
 import { OfficerWarning } from "./components/OfficerWarning";
-import { AdoptOrGenerate, type BabyKind } from "./components/AdoptOrGenerate";
+import { AdoptOrGenerate, type BabyKind, type AdoptedRig } from "./components/AdoptOrGenerate";
 import { DebugOverlay } from "./components/DebugOverlay";
+import { AudioActivityPanel } from "./components/AudioActivityPanel";
+import { RealtimeProviderToggle } from "./components/RealtimeProviderToggle";
 import { AudioDirector } from "./audio/AudioDirector";
 import type { MuppetCharacter, MuppetExpression, MuppetGesture, OfficerVoiceProfile } from "./muppet/muppet-engine";
 import { llmOfficerBeat, isOfficerAgentEnabled, type OfficerToolCall } from "./llm/officer-agent";
 import { fetchOfficerVoiceUrl, isElevenLabsOfficerVoiceEnabled } from "./llm/officer-voice";
 import { callBabyAgent, isBabyAgentEnabled, isGameplayBeat } from "./llm/baby-agent";
+import { callGmAgent, gmToolToDirectorCommand, isGmAgentEnabled } from "./llm/gm-agent";
 import { callPartnerAgent, isPartnerLiveTextEnabled, isPartnerLiveBeat } from "./llm/partner-agent";
 import { RealtimePartner } from "./components/RealtimePartner";
 import type { PartnerToolCall } from "./realtime/types";
 
-type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict";
+type OfficerBeat = "officer_intro" | "ominous_warning" | "verdict" | "debrief_card";
 
 // Beats where the muppet (3D Three.js officer rig) is mounted on stage.
 // Officer beats = officer is delivering a line.
@@ -41,6 +44,9 @@ const MUPPET_STAGE_BEATS: ReadonlySet<string> = new Set([
   "verdict",
   "verification_games",
   "generation_progress",
+  // Officer reads the verdict alongside the debrief card so the player gets
+  // the human-shaped sign-off, not just a static page.
+  "debrief_card",
 ]);
 
 type ChallengeOutcome = "waiting" | "pass" | "fail" | "skip";
@@ -136,6 +142,22 @@ function officerLineFor(beatId: BeatId, state: GameState): { text: string; expre
       gesture: "nod",
     };
   }
+  if (beatId === "debrief_card") {
+    const { ledger } = state;
+    const verdict =
+      ledger.playerShirks >= 3 ? "your honesty needs work"
+      : ledger.playerNightShifts >= 2 && ledger.playerSoothes >= 4 ? "you held the line"
+      : "you held it together";
+    return {
+      text: profile === "Crumb"
+        ? `Right. The file's stamped — ${verdict}, lah. Take the card. Next rehearsal when you're ready.`
+        : profile === "Bern"
+        ? `File closed. ${verdict[0].toUpperCase() + verdict.slice(1)}. The card is yours to keep.`
+        : `That concludes the rehearsal. ${verdict[0].toUpperCase() + verdict.slice(1)}. Take the card with you.`,
+      expression: "warm",
+      gesture: "stamp",
+    };
+  }
   return { text: "", expression: "strict", gesture: "none" };
 }
 
@@ -164,6 +186,8 @@ export function Game() {
   const officerWarningFiredRef = useRef<Set<string>>(new Set());
   // Throttle: last beat for which baby agent was called on BEAT_ENTERED (one call per beat).
   const lastAgentBeatRef = useRef<string>("");
+  // Throttle: last session+beat for which the GM agent was consulted.
+  const lastGmBeatRef = useRef<string>("");
   // Live partner line from Gemini text — overrides scripted line when present.
   const [livePartnerLine, setLivePartnerLine] = useState<string | null>(null);
   // Throttle: track last beat where we fired partner line to fire exactly once per beat entry.
@@ -174,10 +198,22 @@ export function Game() {
   // (after line 2, before scene_ack). adopt → use canonical /puppets/baby/
   // rig; generate → kick off /api/baby/portrait. Survives through baby_roll.
   const [babyKind, setBabyKind] = useState<BabyKind | null>(null);
+  // Rig chosen at the in-stage adopt chooser. Defaults to canonical rig when
+  // the player picks Generate (a fresh portrait overlays the rig downstream).
+  const [adoptedRig, setAdoptedRig] = useState<AdoptedRig | null>(null);
   // Toggle for the in-stage chooser overlay. Set true when officer_intro line 2
   // finishes; cleared the moment the player picks (officer then voices a
   // transition line and we send scene_ack to advance to verification).
   const [intakeChoiceOpen, setIntakeChoiceOpen] = useState(false);
+  // BG music mute toggle — drives ambient channel intensity. Persists in
+  // localStorage so a refresh keeps the player's preference.
+  const [musicMuted, setMusicMuted] = useState<boolean>(() => {
+    try { return localStorage.getItem("babysim:musicMuted") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    audioRef.current?.setIntensity("ambient", musicMuted ? 0 : 1);
+    try { localStorage.setItem("babysim:musicMuted", musicMuted ? "1" : "0"); } catch { /* noop */ }
+  }, [musicMuted]);
   // Game-clock anchor — captured at start_game so we can enforce a hard
   // 90 s deadline regardless of which beat we're in. At the deadline we
   // skip_to verdict so every play ends with a Ministry ruling.
@@ -265,10 +301,19 @@ export function Game() {
       // generation in the background. Lyria takes 20-60 s — by the time the
       // snap fires (~3 s after splash) the cached blob is partway baked. Falls
       // back silently to /audio/music/probation-theme.mp3 if the call fails.
-      // Also anchor the 90 s game deadline timer.
       if (action === "start_game") {
+        // Kick off the music prefetch + start playing the pre-baked fallback
+        // immediately so the player hears something the moment they commit.
+        // The Lyria live blob (if available) takes over silently when ready.
         void audioRef.current?.prefetch("music.probation_theme");
-        gameStartedAtRef.current = performance.now();
+        audioRef.current?.handle({
+          type: "play_audio",
+          channel: "ambient",
+          assetId: "music.probation_theme",
+          loop: true,
+        });
+        // 90 s game deadline anchor moved to baby_arrival entry — the
+        // cinematic intro + verification + reveal shouldn't eat the budget.
       }
 
       if (action === "sing") {
@@ -511,11 +556,18 @@ export function Game() {
     }
   }, [render?.beatId, state, send, executeOfficerTool]);
 
-  // ── 90 s game deadline ─────────────────────────────────────────────────────
-  // Once the player has started a game, force a verdict at the 90 s mark
-  // regardless of beat. The hard deadline keeps every demo playthrough
-  // bounded and guarantees a Ministry ruling on the file. Idempotent —
-  // skipping to a beat we're already in is a no-op via runtime.skipTo.
+  // ── 90 s gameplay deadline ─────────────────────────────────────────────────
+  // The deadline starts the moment the baby first arrives on stage — not at
+  // start_game. The cinematic intro + verification + reveal are pre-game
+  // theatre and shouldn't eat the budget; the player needs the full 90 s of
+  // actual newborn-care for the file to read fairly at verdict.
+  useEffect(() => {
+    if (!render || !state) return;
+    if (render.beatId === "baby_arrival" && gameStartedAtRef.current === null) {
+      gameStartedAtRef.current = performance.now();
+    }
+  }, [render?.beatId, state]);
+
   useEffect(() => {
     if (!render || !state) return;
     if (gameStartedAtRef.current === null) return;
@@ -634,6 +686,81 @@ export function Game() {
     });
   }, [render?.beatId, render?.partner.visible, state]);
 
+  // ── GM agent BEAT_ENTERED trigger ─────────────────────────────────────────
+  // Consults /api/gm once per beat entry. Returned DirectorCommands go through
+  // DirectorRuntime.executeCommand(), which keeps graph validation and clamped
+  // state changes centralized in the engine.
+  useEffect(() => {
+    if (!state || !render) return;
+    if (!isGmAgentEnabled()) return;
+    if (render.beatId === "home") {
+      lastGmBeatRef.current = "";
+      return;
+    }
+
+    const key = `${state.sessionId}:${render.beatId}`;
+    if (lastGmBeatRef.current === key) return;
+    lastGmBeatRef.current = key;
+
+    const liveState = transportRef.current?.getRuntime().getState();
+    const runtime = transportRef.current?.getRuntime();
+    if (!liveState || !runtime) return;
+
+    const beatAtCall = liveState.beatId;
+    callGmAgent(beatAtCall, liveState, liveState.eventLog).then((resp) => {
+      if (!resp?.tools?.length) return;
+      const currentRuntime = transportRef.current?.getRuntime();
+      if (!currentRuntime) return;
+      for (const tool of resp.tools) {
+        const cmd = gmToolToDirectorCommand(tool);
+        if (!cmd) continue;
+        currentRuntime.executeCommand(cmd);
+      }
+    });
+  // Depend on beat identity only so the consult happens once per beat entry.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [render?.beatId, state?.sessionId]);
+
+
+  // ── Baby cry-channel CUE tracks visualState ──────────────────────────────
+  // Every state has a sound — settled and sleep get a quiet contented coo
+  // so the baby is never silent. Distress crescendoes through the cycle:
+  // hungry/fussy use the rising-strain samples, crying picks discomfort
+  // (the most distressed plate) at near-full intensity.
+  useEffect(() => {
+    if (!render) return;
+    const CUE: Record<import("@contracts/game-state").BabyVisualState, string> = {
+      settled: "babyAudio.coo",         // contented gurgle
+      drowsy:  "babyAudio.tired",       // sleepy whimper
+      hungry:  "babyAudio.hunger",      // rhythmic hunger fuss
+      fussy:   "babyAudio.discomfort",  // strained, building
+      crying:  "babyAudio.discomfort",  // peak distress
+      sleep:   "babyAudio.coo",         // gentle breathing/sigh
+    };
+    const cue = CUE[render.baby.visualState];
+    audioRef.current?.handle({ type: "play_audio", channel: "baby", assetId: cue, loop: true });
+  }, [render?.baby.visualState]);
+
+  // ── Baby cry-channel intensity tracks visualState ─────────────────────────
+  // Modulates the baby audio channel's volume with the rig: settled silent,
+  // crying near full, sleep silent. AudioDirector fades over ~240ms so this
+  // breathes in lockstep with the photo-state crossfade.
+  useEffect(() => {
+    if (!render) return;
+    // Crescendoing distress — settled & sleep are audibly present but quiet
+    // (contented gurgle / soft breathing); drowsy/hungry/fussy build up;
+    // crying peaks. Combined with the cue effect above, every state has a
+    // sample AND a volume that telegraphs the baby's mood.
+    const INTENSITY: Record<import("@contracts/game-state").BabyVisualState, number> = {
+      settled: 0.18,   // quiet coo
+      drowsy:  0.30,
+      hungry:  0.55,
+      fussy:   0.75,
+      crying:  0.98,   // near-full
+      sleep:   0.10,   // soft sleep breathing
+    };
+    audioRef.current?.setIntensity("baby", INTENSITY[render.baby.visualState] ?? 0.5);
+  }, [render?.baby.visualState]);
 
   // ── Baby agent BEAT_ENTERED trigger ───────────────────────────────────────
   // Calls the baby agent once whenever the game enters a gameplay beat.
@@ -667,9 +794,10 @@ export function Game() {
   // Voices a transition line in the officer's character, kicks off the live
   // portrait fetch if generate, then sends scene_ack to advance to verification.
   const onChooseIntake = useCallback(
-    async (kind: BabyKind) => {
+    async (kind: BabyKind, rig?: AdoptedRig) => {
       audioRef.current?.unlock();
       setBabyKind(kind);
+      if (rig) setAdoptedRig(rig);
       setIntakeChoiceOpen(false);
       if (!state) return;
 
@@ -789,6 +917,10 @@ export function Game() {
   }
 
   const isOfficerBeat = OFFICER_BEATS.has(render.beatId as OfficerBeat);
+  // ── Show muppet on the debrief screen so the officer literally signs off ──
+  // (the OFFICER_BEATS set already includes "debrief_card" so the dialog
+  // effect speaks the verdict line; here we just ensure the stage stays up
+  // alongside the card for that beat.)
   const isHome = render.beatId === "home";
   const isDebrief = render.beatId === "debrief_card";
   const isReveal = render.beatId === "baby_roll";
@@ -838,6 +970,19 @@ export function Game() {
 
   return (
     <main className="app-shell">
+      <div className="hud-cluster" aria-label="Session controls">
+        <AudioActivityPanel audio={audioRef.current} />
+        <RealtimeProviderToggle />
+        <button
+          type="button"
+          className="music-toggle"
+          onClick={() => setMusicMuted((m) => !m)}
+          aria-label={musicMuted ? "Unmute music" : "Mute music"}
+          title={musicMuted ? "Unmute music" : "Mute music"}
+        >
+          {musicMuted ? "🔇" : "🔊"}
+        </button>
+      </div>
       <header className="app-bar">
         <span className="kicker">Ministry of Family and Human Development</span>
         {/* Logos now cycle on the muppet's chest badge (see muppet-engine.ts).
@@ -917,6 +1062,8 @@ export function Game() {
                   visualState={render.baby.visualState}
                   name={render.baby.name}
                   mood={render.baby.mood}
+                  rigManifestUrl={adoptedRig?.manifest}
+                  rigBaseDir={adoptedRig?.baseDir}
                 />
                 {babyHint && (
                   <p className="baby-hint" aria-live="polite">{babyHint}</p>
@@ -979,12 +1126,20 @@ export function Game() {
                 onToolCall={(call: PartnerToolCall) => {
                   // Map partner tool calls back into game actions.
                   if (call.name === "concede_argument" || call.name === "take_night_shift") {
+                    send({ type: "agent_partner_tool", tool: call.name });
                     setRealtimeOpen(false);
                     send({ type: "action", action: "comfort_partner" });
                   } else if (call.name === "refuse_night_shift") {
                     // Player still has to get up.
+                    send({ type: "agent_partner_tool", tool: "refuse_night_shift" });
                     setRealtimeOpen(false);
                     send({ type: "action", action: "get_up" });
+                  } else if (call.name === "raise_resentment") {
+                    send({
+                      type: "agent_partner_tool",
+                      tool: "raise_resentment",
+                      delta: typeof call.args.delta === "number" ? call.args.delta : undefined,
+                    });
                   }
                 }}
               />

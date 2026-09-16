@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import "./AdoptOrGenerate.css";
 
 /**
@@ -14,67 +13,55 @@ import "./AdoptOrGenerate.css";
 
 export type BabyKind = "adopt" | "generate";
 
+export type AdoptedRig = { manifest: string; baseDir: string };
+
 type Props = {
   officerName: string;
   partnerName: string;
-  onChoose: (kind: BabyKind) => void;
+  onChoose: (kind: BabyKind, rig?: AdoptedRig) => void;
 };
 
-// Pool of pre-generated rigs — each is a directory under /puppets/ with its
-// own face_backplate + 6 expression layer sets. Today only the canonical
-// rig exists; adding more is just dropping a sibling dir.
-const ADOPT_RIG_POOL: Array<{ id: string; faceBackplate: string; manifest: string; baseDir: string }> = [
+// Pool of pre-generated rigs — each is a directory under /puppets/ with a
+// puppet.json manifest. Single rig today: full-frame photo-state cycle
+// (settled / drowsy / hungry / fussy / crying / sleep).
+const ADOPT_RIG_POOL: Array<{ id: string; manifest: string; baseDir: string }> = [
   {
-    id: "ward-001",
-    faceBackplate: "/puppets/baby/layers/face_backplate.png",
-    manifest: "/puppets/baby/puppet.json",
-    baseDir: "/puppets/baby",
+    id: "ward-photoreal-v1",
+    manifest: "/puppets/baby-photoreal-v1/puppet.json",
+    baseDir: "/puppets/baby-photoreal-v1",
   },
 ];
 
 export function AdoptOrGenerate({ officerName, partnerName: _partnerName, onChoose }: Props) {
-  // Pick a random rig preview so each game feels fresh once the pool grows.
-  const [adoptPreview, setAdoptPreview] = useState<string>(ADOPT_RIG_POOL[0].faceBackplate);
-
-  useEffect(() => {
-    const pick = ADOPT_RIG_POOL[Math.floor(Math.random() * ADOPT_RIG_POOL.length)];
-    setAdoptPreview(pick.faceBackplate);
-  }, []);
+  // Single rig today — adopt resolves to it directly. (Pool kept as a list so
+  // adding more rigs is a one-line append.)
+  const pick = ADOPT_RIG_POOL[0];
 
   return (
     <div className="adopt-generate">
       <div className="adopt-generate-prompt">
         <span className="kicker">{officerName}</span>
         <p className="adopt-generate-quote">
-          "Two paths. The Ministry will assign one of our wards
-          {" "}— the gacha pool — or generate a child algorithmically from
-          your intake photo. Decide now."
+          "Two paths. Adopt a Ministry ward from the pool, or generate a
+          child algorithmically from your intake photo. Decide now."
         </p>
       </div>
 
       <div className="adopt-generate-cards">
-        <button className="adopt-card" onClick={() => onChoose("adopt")}>
-          <div className="adopt-card-art">
-            <img src={adoptPreview} alt="" draggable={false} />
-            <span className="adopt-card-tag">Adopt</span>
-          </div>
-          <div className="adopt-card-body">
-            <h3>Adopt from the pool</h3>
-            <p>A pre-generated ward, fully ready. Faster start, less personalized.</p>
-            <span className="adopt-card-meta">Instant · curated traits</span>
-          </div>
+        <button
+          className="adopt-card adopt-card-simple"
+          onClick={() => onChoose("adopt", { manifest: pick.manifest, baseDir: pick.baseDir })}
+        >
+          <h3>Adopt</h3>
+          <span className="adopt-card-meta">Instant · pre-generated ward</span>
         </button>
 
-        <button className="adopt-card" onClick={() => onChoose("generate")}>
-          <div className="adopt-card-art adopt-card-art-gen">
-            <span className="adopt-card-glyph" aria-hidden="true">✨</span>
-            <span className="adopt-card-tag">Generate</span>
-          </div>
-          <div className="adopt-card-body">
-            <h3>Generate from your file</h3>
-            <p>Live portrait composed from your intake photo. Takes a moment to render.</p>
-            <span className="adopt-card-meta">~ 60 s · personalized</span>
-          </div>
+        <button
+          className="adopt-card adopt-card-simple"
+          onClick={() => onChoose("generate")}
+        >
+          <h3>Generate</h3>
+          <span className="adopt-card-meta">~ 60 s · from your intake photo</span>
         </button>
       </div>
     </div>

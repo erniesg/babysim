@@ -105,7 +105,7 @@ const MOTION: Record<BabyVisualState, MotionParams> = {
 };
 
 // Cross-fade duration on expression change.
-const TRANSITION_MS = 400;
+const TRANSITION_MS = 320;
 
 // Issue #3: the eyes_crying plate has alignment artifacts (dark voids leak
 // through). Substitute the settled eye plate; cry mouth + red vignette + faster

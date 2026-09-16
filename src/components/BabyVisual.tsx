@@ -18,6 +18,8 @@ type Props = {
   visualState: BabyVisualState;
   name?: string;
   mood: number;
+  rigManifestUrl?: string;
+  rigBaseDir?: string;
 };
 
 // Check whether a URL is reachable by HEAD request.
@@ -31,21 +33,25 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-const PUPPET_MANIFEST_URL = "/puppets/baby/puppet.json";
-const PUPPET_BASE_DIR = "/puppets/baby";
+const DEFAULT_PUPPET_MANIFEST_URL = "/puppets/baby-photoreal-v1/puppet.json";
+const DEFAULT_PUPPET_BASE_DIR = "/puppets/baby-photoreal-v1";
 
-export function BabyVisual({ visualState, name, mood }: Props) {
+export function BabyVisual({ visualState, name, mood, rigManifestUrl, rigBaseDir }: Props) {
   const view = STATE[visualState];
   const animate = visualState === "crying" || visualState === "fussy";
 
-  // Puppet availability: probe once on mount.
-  // undefined = probing, true = puppet available, false = not available.
+  const manifestUrl = rigManifestUrl ?? DEFAULT_PUPPET_MANIFEST_URL;
+  const baseDir = rigBaseDir ?? DEFAULT_PUPPET_BASE_DIR;
+
+  // Puppet availability: probe whenever the manifest URL changes (so picking
+  // a different rig from the adopt pool re-probes the new manifest).
   const [puppetAvailable, setPuppetAvailable] = useState<boolean | undefined>(
     undefined
   );
   useEffect(() => {
-    void pathExists(PUPPET_MANIFEST_URL).then(setPuppetAvailable);
-  }, []);
+    setPuppetAvailable(undefined);
+    void pathExists(manifestUrl).then(setPuppetAvailable);
+  }, [manifestUrl]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -154,8 +160,8 @@ export function BabyVisual({ visualState, name, mood }: Props) {
         <div className="baby-stage">
           <PuppetCanvas
             visualState={visualState}
-            manifestUrl={PUPPET_MANIFEST_URL}
-            baseDir={PUPPET_BASE_DIR}
+            manifestUrl={manifestUrl}
+            baseDir={baseDir}
           />
         </div>
       ) : puppetAvailable === false ? (

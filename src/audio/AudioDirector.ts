@@ -49,6 +49,28 @@ export class AudioDirector {
   // Revoked in dispose() to avoid memory leaks.
   private liveBlobUrls: Map<string, string> = new Map();
 
+  // Subscribers to channel-activity changes. Used by the HUD ActivityPanel
+  // to pulse a dot whenever a channel is actively emitting sound (intensity
+  // > 0 AND an element is mounted-and-playing).
+  private activityListeners = new Set<(active: Partial<Record<Channel, boolean>>) => void>();
+
+  // Latest activity snapshot — keep one source of truth so subscribers added
+  // after a play() call still get the current state on first dispatch.
+  private activity: Partial<Record<Channel, boolean>> = {};
+
+  onActivity(fn: (active: Partial<Record<Channel, boolean>>) => void): () => void {
+    this.activityListeners.add(fn);
+    fn({ ...this.activity });
+    return () => this.activityListeners.delete(fn);
+  }
+
+  private setActivity(channel: Channel, active: boolean): void {
+    if (this.activity[channel] === active) return;
+    this.activity[channel] = active;
+    const snapshot = { ...this.activity };
+    for (const fn of this.activityListeners) fn(snapshot);
+  }
+
   unlock(): void {
     this.unlocked = true;
   }
@@ -65,6 +87,47 @@ export class AudioDirector {
   // ignore redundant "play same asset, same loop" calls (the engine's tick
   // loop fires play_audio every game-hour while the cry persists).
   private playing: Partial<Record<Channel, { assetId: string; loop: boolean }>> = {};
+
+  // Per-channel intensity multiplier (0..1) on top of the channel's baseline
+  // volume. Used to drive cry-channel loudness from BabyVisualState — settled
+  // -> 0, fussy -> 0.55, crying -> 0.85 — so the audio breathes with the rig.
+  private intensities: Partial<Record<Channel, number>> = {
+    baby: 1,
+    partner: 1,
+    officer: 1,
+    ambient: 1,
+  };
+
+  // Set the channel's intensity multiplier and fade any active element on
+  // that channel toward its new effective target volume over ~240 ms.
+  // Also pauses/resumes the underlying element on hard 0/non-zero flips so
+  // that muting is durable (a paused element survives tab-backgrounding /
+  // audio-context suspends) and unmuting reliably restarts playback.
+  setIntensity(channel: Channel, level: number): void {
+    const clamped = Math.max(0, Math.min(1, level));
+    const prev = this.intensities[channel] ?? 1;
+    this.intensities[channel] = clamped;
+    const el = this.elements[channel];
+    if (!el) return;
+    const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+    if (clamped <= 0.001) {
+      // Hard mute — fade out then pause so the element is durably stopped.
+      this.fadeTo(el, 0, 240, () => {
+        try { el.pause(); } catch { /* noop */ }
+      });
+      this.setActivity(channel, false);
+    } else if (prev <= 0.001 && clamped > 0.001) {
+      // Hard unmute — resume from paused, fade up to target.
+      el.volume = 0;
+      el.play().catch(() => { /* autoplay blocked — silent fail */ });
+      this.fadeTo(el, baseline * clamped, 240);
+      this.setActivity(channel, true);
+    } else {
+      // Smooth modulate (e.g. visualState shift) — just retarget.
+      this.fadeTo(el, baseline * clamped, 240);
+      this.setActivity(channel, true);
+    }
+  }
 
   private fadeTo(el: HTMLAudioElement, target: number, durMs: number, onDone?: () => void) {
     const start = performance.now();
@@ -92,7 +155,9 @@ export class AudioDirector {
     const url = await this.resolveUrl(assetId);
     if (!url) return;
 
-    const targetVol = CHANNEL_VOLUME[channel] ?? 0.6;
+    const baseline = CHANNEL_VOLUME[channel] ?? 0.6;
+    const intensity = this.intensities[channel] ?? 1;
+    const targetVol = baseline * intensity;
 
     // Fade-out any current element on this channel (don't cut abruptly).
     const prev = this.elements[channel];
@@ -107,13 +172,23 @@ export class AudioDirector {
     const el = new Audio(url);
     el.loop = loop;
     el.volume = 0;
-    el.play().catch(() => {
-      // Autoplay rejected or file missing — silent fail keeps the demo running.
-    });
+    // Only start playback if the channel isn't muted right now. The element
+    // is still mounted into this.elements[channel] so a later setIntensity
+    // unmute can resume from paused.
+    if (intensity > 0.001) {
+      el.play().catch(() => {
+        // Autoplay rejected or file missing — silent fail keeps the demo running.
+      });
+    }
     this.elements[channel] = el;
     this.playing[channel] = { assetId, loop };
-    // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
-    this.fadeTo(el, targetVol, 300);
+    if (intensity > 0.001) {
+      // Fade in over 300ms so state-cycling between cry sounds doesn't pop.
+      this.fadeTo(el, targetVol, 300);
+      this.setActivity(channel, true);
+    } else {
+      this.setActivity(channel, false);
+    }
   }
 
   // Resolve the URL to use for a given assetId.
@@ -213,6 +288,7 @@ export class AudioDirector {
         });
         delete this.elements[ch];
         delete this.playing[ch];
+        this.setActivity(ch, false);
       }
       return;
     }
@@ -224,6 +300,7 @@ export class AudioDirector {
       });
       delete this.elements[target];
       delete this.playing[target];
+      this.setActivity(target, false);
     }
   }
 

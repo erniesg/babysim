@@ -14,11 +14,11 @@ const VALID_VIBES = new Set<Vibe>(["intro", "argument", "verdict"]);
 
 const VIBE_PROMPTS: Record<Vibe, string> = {
   intro:
-    "Driving cinematic title cue, brisk 110 BPM. Stabs of rhythmic pizzicato strings, syncopated kick + snare on a heavy reverb, low brass marcato motif, occasional timpani hit, glittery harp arpeggio every two bars. Energetic and adventurous — like a 1970s East Asian state-drama opener crossed with a heist movie. Builds urgency without losing menace. Instrumental, no vocals. Loopable.",
+    "High-energy cinematic dubstep title cue, 140 BPM. Heavy half-time wobble bassline, big sub drops every 8 bars, glitchy reese bass, snappy trap-style snare with reverb tail, syncopated 808 kicks, rising risers + impact hits before each drop. Layered orchestral stabs (pizzicato strings, low brass marcato) keep a faint state-drama flavor under the bass. Adventurous, kinetic, slightly menacing — like a heist-movie opener gone neon. Instrumental, no vocals. Loopable.",
   argument:
-    "Tense domestic scene underscore, escalating. Rising string ostinato, nervous pizzicato, muted brass stabs, syncopated low-end pulse. 1970s East Asian family drama style. Instrumental, no vocals. Builds.",
+    "Tense escalating dubstep underscore. Stuttering wobble bassline at 140 BPM half-time, glitchy snare rolls building to a half-drop, growling reese bass underneath nervous pizzicato strings, muted brass stabs. Domestic-scene tension cranked through a sound system. Instrumental, no vocals. Builds.",
   verdict:
-    "Solemn bureaucratic verdict cue. Stately low brass, single dampened timpani hit, held string chord resolving downward. Evokes official judgment. Instrumental, no vocals. Short, final.",
+    "Solemn bureaucratic verdict cue with a single deep sub-bass drop on the gavel hit. Stately low brass, single dampened timpani, held string chord resolving downward, then one massive low-frequency drop that decays into silence. Official judgment, modern weight. Instrumental, no vocals. Short, final.",
 };
 
 // Service-account JSON shape (only what we need)

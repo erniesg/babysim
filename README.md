@@ -28,7 +28,7 @@ Hidden baby traits. A tired partner. A fairness ledger between parents. A verdic
 | 45s | first cry → soothe discovery | Player tries `feed`/`rock`/`sing`/`shush`/`hold` — only the action matching the hidden `soothing` trait calms the baby. **Sing** opens a 3.5s mic capture with Web Audio analysis (volume + rhythm) |
 | 60s | time jump → night cry | Screen darkens; partner shown asleep |
 | 65s | wake / shirk / wake-partner | Choice updates the fairness ledger live |
-| 75s | argument scene | Partner avatar enlarges; **realtime voice session** opens (Gemini Flash Live default; OpenAI Realtime swappable); partner can call `take_night_shift` / `refuse_night_shift` / `concede_argument` / `raise_resentment` tools that mutate the game state |
+| 75s | argument scene | Partner avatar enlarges; **realtime voice session** opens (OpenAI Realtime default; Gemini Flash Live selectable once Vertex Live API auth works); partner can call `take_night_shift` / `refuse_night_shift` / `concede_argument` / `raise_resentment` tools that mutate the game state |
 | 85s | get up + soothe | Cry resolves |
 | 90s | "She smiled at you" cute moment | CSS payoff animation today; Veo-3.1 video via `/api/cute-payoff/video` (LRO) wired and live |
 | 95s | muppet verdict | gpt-5.5 reads your ledger and renders a verdict that quotes specific numbers |
@@ -116,25 +116,25 @@ The `DirectorCommand` schema (`contracts/director-commands.ts`) IS a tool-call s
 | Officer agent | OpenAI `gpt-5.5` (chat completions tool calling; 7 tools); per-character voice profiles (Ernest / Bern / Crumb) |
 | Baby agent | OpenAI `gpt-5.5` (7 consultative tools + `trigger_fallback`); reducer clamps deltas via `dispatchAgentEvent` |
 | Partner per-beat text | Gemini `gemini-3.1-flash-lite` with `say_line` function-calling |
-| Realtime partner mic (arguments only) | Gemini Flash Live Preview (default); OpenAI `gpt-realtime` swap via `VITE_REALTIME_PARTNER_PROVIDER=openai` |
+| Realtime partner mic (arguments only) | OpenAI `gpt-realtime` by default; Gemini Flash Live selectable via `VITE_REALTIME_PARTNER_PROVIDER=gemini` once Vertex Live API auth is enabled |
 | Music | Lyria-002 via Vertex AI (default ON); pre-baked `public/audio/music/probation-theme.mp3` fallback |
 | Cry pack | Real recordings from the donateacry public dataset, 4 categories (`hunger`, `tired`, `discomfort`, `coo`); ElevenLabs `text_to_sound_v2` is the live alternative |
 | Officer + baby portraits | Replicate `openai/gpt-image-2`; fal.ai `flux-pro` selectable for the baby path |
 | Cinematic | Replicate `seedance` / `veo` and fal `kling-v3-pro` (cute_payoff uses Veo-3.1 LRO; pass `provider: "veo"` for any baby cinematic) |
 | State / RNG | mulberry32 seeded from a string; same seed always produces the same baby/partner/officer roll |
-| Testing | vitest (152 engine tests, all green) |
+| Testing | vitest (84 source tests, all green) |
 
 ## Agents
 
-Three live LLM agents share the stage today, all swappable via env flags:
+Four live LLM agents share the stage today, all swappable via env flags:
 
 | Agent | Where | Default model | Tool surface |
 |---|---|---|---|
 | Officer | `/api/officer` | OpenAI `gpt-5.5` | `say`, `set_expression`, `play_gesture`, `warn_player`, `start_challenge`, `advance_phase`, `request_player_input` |
 | Baby | `/api/baby` | OpenAI `gpt-5.5` | `play_audio`, `set_caption`, `set_visual_state`, `set_mood_delta`, `set_need_delta`, `request_attention`, `acknowledge_action` (+ `trigger_fallback`) |
 | Partner per-beat text | `/api/partner/line` | Gemini `gemini-3.1-flash-lite` | `say_line` |
-| Partner realtime mic (arguments only) | browser → Gemini Live | `gemini-3.1-flash-live-preview` | `take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment` |
-| GM (Director) | `/api/gm` | OpenAI `gpt-5.5` | full `DirectorCommand[]`; `enter_beat` server-side validated against `BEAT_GRAPH` |
+| Partner realtime mic (arguments only) | browser → OpenAI Realtime | `gpt-realtime` | `take_night_shift`, `refuse_night_shift`, `concede_argument`, `raise_resentment` |
+| GM (Director) | `/api/gm` + `src/llm/gm-agent.ts` | OpenAI `gpt-5.5` | full `DirectorCommand[]`; `enter_beat` server/runtime validated against `BEAT_GRAPH` |
 
 Officer voice defaults to ElevenLabs TTS via `/api/officer/say` (browser `SpeechSynthesis` is the fallback). The reducer remains authoritative — agent tool calls are CONSULTATIVE and dispatched through `dispatchAgentEvent`. The handlers are minimal hand-rolled implementations; the published Cloudflare Agents SDK package and Durable Objects are not yet in use.
 
@@ -218,8 +218,8 @@ The animated baby is a 2.5D layered-PNG puppet composited on a single `<canvas>`
 
 ## Build philosophy
 
-1. **The fully dynamic game is the product.** Every officer line, baby reaction, partner argument, asset, and beat decision is intended to come from a generative provider — gpt-5.5 / Gemini Flash Live / OpenAI Realtime / ElevenLabs / Lyria / Veo. The deterministic implementations exist as testing harnesses and graceful-degradation fallbacks when a model is slow, rate-limited, or unreachable.
-2. **Every component is independently swappable** between deterministic and probabilistic via a uniform interface. Officer voice (browser TTS / ElevenLabs / Gemini Live native), baby SFX (bundled / ElevenLabs SFX / Gemini TTS), partner (scripted lines / Gemini Flash Live / OpenAI Realtime), GM (switch statement / gpt-5.5 emitting `DirectorCommand[]`), debrief (template / gpt-5.5). Each is one env flag away.
+1. **The fully dynamic game is the product.** Every officer line, baby reaction, partner argument, asset, and beat decision is intended to come from a generative provider — gpt-5.5 / OpenAI Realtime / Gemini Flash Live once enabled / ElevenLabs / Lyria / Veo. The deterministic implementations exist as testing harnesses and graceful-degradation fallbacks when a model is slow, rate-limited, or unreachable.
+2. **Every component is independently swappable** between deterministic and probabilistic via a uniform interface. Officer voice (browser TTS / ElevenLabs / Gemini Live native), baby SFX (bundled / ElevenLabs SFX / Gemini TTS), partner (scripted lines / OpenAI Realtime / Gemini Flash Live), GM (switch statement / gpt-5.5 emitting `DirectorCommand[]`), debrief (template / gpt-5.5). Each is one env flag away.
 3. **Reducer is authoritative regardless of mode.** Whether an agent is a `switch` statement or gpt-5.5, both emit the same `DirectorCommand[]` shape and the reducer validates. Direct state mutation is forbidden in either mode. This is what makes (1) and (2) trivially safe.
 4. **Generation is on the critical path,** not decoration. Music, cries, avatars, videos: pre-generated when demo timing demands it (Lyria probation theme at boot, baby cries at build time, partner avatars per archetype), generated live when latency allows (officer line per beat, partner voice per turn).
 5. **The beat graph is the contract for both modes.** Whether the GM is deterministic or LLM-driven, beats are added to `contracts/beats.ts` with explicit `allowedActions`, `timeoutMs`, and `fallbackBeat`. The runtime rejects out-of-graph transitions even if a model proposes them.

@@ -178,6 +178,30 @@ export class LocalGameTransport implements GameTransport {
         this.runtime.dispatchAgentEvent(evt);
         break;
       }
+
+      case "agent_partner_tool": {
+        const boundedDelta = Math.max(1, Math.min(25, Math.round(message.delta ?? 8)));
+        const payload =
+          message.tool === "take_night_shift" || message.tool === "concede_argument"
+            ? {
+                tool: message.tool,
+                ledgerDelta: { partnerNightShifts: 1 },
+                partnerDelta: { resentment: -8, fatigue: 8, isAsleep: false },
+              }
+            : message.tool === "refuse_night_shift"
+              ? {
+                  tool: message.tool,
+                  ledgerDelta: { partnerShirks: 1 },
+                  partnerDelta: { resentment: 10, fatigue: 4, isAsleep: false },
+                }
+              : {
+                  tool: message.tool,
+                  partnerDelta: { resentment: boundedDelta, isAsleep: false },
+                };
+        const evt = makeGameEvent("partner", "STATE_CHANGED", payload);
+        this.runtime.dispatch(evt);
+        break;
+      }
     }
   }
 

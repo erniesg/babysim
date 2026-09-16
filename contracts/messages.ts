@@ -21,7 +21,12 @@ export type ClientMessage =
   // Baby-agent consultative events — applied through reducer; engine clamps.
   | { type: "agent_set_visual_state"; state: BabyVisualState }
   | { type: "agent_set_mood_delta"; delta: number }
-  | { type: "agent_set_need_delta"; need: "hunger" | "sleepiness" | "discomfort" | "connection" | "health"; delta: number };
+  | { type: "agent_set_need_delta"; need: "hunger" | "sleepiness" | "discomfort" | "connection" | "health"; delta: number }
+  | {
+      type: "agent_partner_tool";
+      tool: "take_night_shift" | "concede_argument" | "refuse_night_shift" | "raise_resentment";
+      delta?: number;
+    };
 
 export type RenderState = {
   sessionId: string;
@@ -70,4 +75,3 @@ export type ServerMessage =
   | { type: "generation_progress"; progress: number; label: string };
 
 export type { GameEvent };
-

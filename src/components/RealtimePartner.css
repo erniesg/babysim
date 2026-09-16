@@ -95,3 +95,56 @@
   border-radius: 6px;
   margin-left: auto;
 }
+
+
+/* Chat log + text input for the type/realtime fallback path. */
+.realtime-chatlog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(245, 220, 140, 0.14);
+  border-radius: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.realtime-chat-line { margin: 0; font-size: 14px; line-height: 1.45; }
+.realtime-chat-line.realtime-chat-you { color: rgba(255, 255, 255, 0.82); }
+.realtime-chat-line.realtime-chat-partner { color: rgba(245, 220, 140, 0.95); font-style: italic; }
+.realtime-chat-who { font-weight: 600; opacity: 0.7; margin-right: 4px; }
+
+.realtime-text-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.realtime-text-input {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(245, 220, 140, 0.28);
+  border-radius: 10px;
+  color: #fff;
+}
+.realtime-text-input:focus { outline: none; border-color: rgba(245, 220, 140, 0.6); }
+.realtime-text-input:disabled { opacity: 0.5; }
+.realtime-text-send {
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(245, 220, 140, 0.16);
+  border: 1px solid rgba(245, 220, 140, 0.36);
+  border-radius: 10px;
+  color: rgba(245, 220, 140, 0.96);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.realtime-text-send:hover:not(:disabled) {
+  background: rgba(245, 220, 140, 0.28);
+  border-color: rgba(245, 220, 140, 0.6);
+}
+.realtime-text-send:disabled { opacity: 0.5; cursor: not-allowed; }
+
